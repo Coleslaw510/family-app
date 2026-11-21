@@ -12,6 +12,9 @@ enum BudgetSheet: Identifiable {
     case addAccount
     case editAccount(Account)
     case importer
+    case categories
+    case mortgage
+    case ask
     case settings
 
     var id: String {
@@ -26,6 +29,9 @@ enum BudgetSheet: Identifiable {
         case .addAccount: return "add-account"
         case .editAccount(let account): return "acct-\(account.id)"
         case .importer: return "import"
+        case .categories: return "categories"
+        case .mortgage: return "mortgage"
+        case .ask: return "ask"
         case .settings: return "settings"
         }
     }
@@ -51,8 +57,18 @@ struct BudgetView: View {
                         insights(snapshot)
                         income(snapshot)
                         history(snapshot)
-                        baseline(snapshot)
-                        bills(snapshot)
+                baseline(snapshot)
+                Button { sheet = .mortgage } label: {
+                    Text("Mortgage and home value")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(Theme.accent2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(14)
+                        .background(Color.white, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Theme.line, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                bills(snapshot)
                         transactions(snapshot)
                         accounts(snapshot)
                     } else {
@@ -210,7 +226,7 @@ struct BudgetView: View {
                     Text("Spending by category")
                         .font(.system(size: 15, weight: .bold))
                     Spacer()
-                    Button { sheet = .budgets } label: {
+                    Button { sheet = .categories } label: {
                         Label("Set budgets", systemImage: "square.and.pencil")
                             .font(.system(size: 11.5, weight: .bold))
                             .foregroundStyle(Theme.accent2)
@@ -336,6 +352,12 @@ struct BudgetView: View {
                 Text(snapshot.placeholders.ai)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Theme.soft)
+                Button { sheet = .ask } label: {
+                    Text("Ask Gemini")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(Theme.accent2)
+                }
+                .buttonStyle(.plain)
             }
         }
     }
@@ -665,7 +687,7 @@ struct BudgetView: View {
                     }
                     .buttonStyle(.plain)
                 }
-                Text(snapshot.placeholders.bankSync)
+                Text("SimpleFIN is not in this version. " + snapshot.placeholders.bankSync)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Theme.soft)
                 if snapshot.accounts.isEmpty {
@@ -734,7 +756,13 @@ struct BudgetView: View {
         case .editAccount(let account):
             AccountEditor(existing: account)
         case .importer:
-            ImportSheet()
+            BankImportView()
+        case .categories:
+            CategoryManagerView()
+        case .mortgage:
+            MortgageView()
+        case .ask:
+            AskInsightView()
         case .settings:
             SettingsView()
         }

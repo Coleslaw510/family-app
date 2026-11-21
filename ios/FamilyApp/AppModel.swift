@@ -20,6 +20,9 @@ final class AppModel: ObservableObject {
     @Published var household: Household?
     @Published var events: [FamilyEvent] = []
     @Published var trips: [Trip] = []
+    @Published var food: FoodBundle?
+    @Published var mortgage: MortgageSnapshot?
+    @Published var foodMemberId: String?
     @Published var lastSynced: Date?
     @Published var banner: String?
     @Published var celebration: Celebration?
@@ -164,8 +167,10 @@ final class AppModel: ObservableObject {
             async let householdCall: Household = api.get("/v1/household")
             async let eventCall: EventList = api.get("/v1/events")
             async let tripCall: TripList = api.get("/v1/trips")
-            let (dash, budgetData, marriageData, householdData, eventList, tripList) =
-                try await (dashCall, budgetCall, marriageCall, householdCall, eventCall, tripCall)
+            async let foodCall: FoodBundle = api.get("/v1/food?day=\(today)")
+            async let mortgageCall: MortgageSnapshot = api.get("/v1/mortgage?today=\(today)")
+            let (dash, budgetData, marriageData, householdData, eventList, tripList, foodData, mortgageData) =
+                try await (dashCall, budgetCall, marriageCall, householdCall, eventCall, tripCall, foodCall, mortgageCall)
             // Publish everything in one go so the screen redraws once, after all calls finish.
             dashboard = dash
             family = dash.family
@@ -176,6 +181,9 @@ final class AppModel: ObservableObject {
             household = householdData
             events = eventList.events
             trips = tripList.trips
+            food = foodData
+            mortgage = mortgageData
+            if foodMemberId == nil { foodMemberId = dash.member.id }
             lastSynced = Date()
             banner = nil
         } catch {
@@ -285,6 +293,9 @@ final class AppModel: ObservableObject {
         household = nil
         events = []
         trips = []
+        food = nil
+        mortgage = nil
+        foodMemberId = nil
         lastSynced = nil
         celebration = nil
         tab = .home

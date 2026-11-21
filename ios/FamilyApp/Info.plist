@@ -24,6 +24,10 @@
 	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Family App uses the camera to scan food barcodes and photograph a meal for an estimate you review before saving.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Family App can use a photo you choose so Gemini can estimate a meal. You review the numbers before anything is saved.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>

@@ -2,11 +2,13 @@ import SwiftUI
 
 private enum CalendarSheet: Identifiable {
     case settings
+    case feeds
     case event(FamilyEvent)
 
     var id: String {
         switch self {
         case .settings: return "settings"
+        case .feeds: return "feeds"
         case .event(let event): return "event-\(event.id)-\(event.startsAt)-\(event.title)"
         }
     }
@@ -29,6 +31,11 @@ struct CalendarView: View {
                         .tracking(-0.6)
                     Spacer()
                     GearButton { sheet = .settings }
+                    Button { sheet = .feeds } label: {
+                        Image(systemName: "dot.radiowaves.left.and.right")
+                            .foregroundStyle(Theme.muted)
+                    }
+                    .buttonStyle(.plain)
                 }
                 Card {
                     HStack(spacing: 8) {
@@ -75,7 +82,7 @@ struct CalendarView: View {
                                 .foregroundStyle(Theme.muted)
                         }
                         ForEach(dayEvents) { event in
-                            Button { sheet = .event(event) } label: {
+                            Button { if event.readOnly != true { sheet = .event(event) } } label: {
                                 HStack(spacing: 8) {
                                     Circle().fill(Color(hexString: event.color)).frame(width: 8, height: 8)
                                     VStack(alignment: .leading, spacing: 1) {
@@ -103,6 +110,8 @@ struct CalendarView: View {
                 switch item {
                 case .settings:
                     SettingsView()
+                case .feeds:
+                    CalendarFeedsView()
                 case .event(let event):
                     EventEditor(existing: event)
                 }

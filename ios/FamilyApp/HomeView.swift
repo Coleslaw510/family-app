@@ -15,6 +15,8 @@ struct HomeView: View {
                 }
                 calendarCard
                 vacationCard
+                mortgageHomeCard
+                foodHomeCard
             }
             .padding(.horizontal, 16)
             .padding(.top, 4)
@@ -348,6 +350,63 @@ struct HomeView: View {
             }
         }
         .onTapGesture { app.tab = .vacations }
+    }
+
+    private var mortgageHomeCard: some View {
+        let summary = app.mortgage?.summary
+        return Card {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    IconTile(system: "house", colors: Theme.billsGradient)
+                    Text("Home")
+                        .font(.system(size: 15, weight: .bold))
+                }
+                if let balance = summary?.balanceCents, app.mortgage?.loanCents != nil {
+                    Text(Money.format(balance))
+                        .font(.system(size: 20, weight: .heavy))
+                    Text(summary?.payoffDate.map { "Payoff \(Dates.shortDay($0))" } ?? "Mortgage")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Theme.muted)
+                    if let equity = summary?.equityCents {
+                        Text("Equity \(Money.format(equity))")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Theme.good)
+                    }
+                } else {
+                    Text("Add your mortgage in Budget")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Theme.muted)
+                }
+            }
+        }
+        .onTapGesture { app.tab = .budget }
+    }
+
+    private var foodHomeCard: some View {
+        let totals = app.food?.totals
+        let goals = app.food?.goals
+        let left = (goals?.calories ?? 0) - (totals?.calories ?? 0)
+        return Card {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    IconTile(system: "fork.knife", colors: Theme.incomeGradient)
+                    Text("Food")
+                        .font(.system(size: 15, weight: .bold))
+                }
+                if let goals, let totals {
+                    Text("\(left) kcal left")
+                        .font(.system(size: 20, weight: .heavy))
+                        .foregroundStyle(left >= 0 ? Theme.text : Theme.bad)
+                    Text("Protein \(totals.protein) of \(goals.protein) g")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Theme.muted)
+                } else {
+                    Text("Today's calories and protein")
+                        .foregroundStyle(Theme.muted)
+                }
+            }
+        }
+        .onTapGesture { app.tab = .food }
     }
 }
 

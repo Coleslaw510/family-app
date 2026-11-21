@@ -312,6 +312,8 @@ struct FamilyEvent: Decodable, Identifiable {
     var notes: String?
     var color: String
     var createdBy: String?
+    var source: String?
+    var readOnly: Bool?
 }
 
 struct EventList: Decodable {

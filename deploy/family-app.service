@@ -12,6 +12,8 @@ Environment=JOIN_MAX_ATTEMPTS=8
 Environment=JOIN_WINDOW_SECONDS=900
 Environment=CREATE_MAX_ATTEMPTS=8
 Environment=SESSION_DAYS=400
+Environment=FEED_POLL_SECONDS=900
+EnvironmentFile=-/home/ubuntu/.config/family-app/secrets.env
 ExecStart=/opt/family-app/server/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
 Restart=on-failure
 RestartSec=3

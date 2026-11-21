@@ -59,7 +59,7 @@ enum Theme {
 }
 
 enum AppTab: String, CaseIterable, Identifiable {
-    case home, budget, marriage, family, calendar, vacations
+    case home, budget, marriage, family, food, calendar, vacations
 
     var id: String { rawValue }
 
@@ -69,6 +69,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .budget: return "Budget"
         case .marriage: return "Marriage"
         case .family: return "Family"
+        case .food: return "Food"
         case .calendar: return "Calendar"
         case .vacations: return "Vacations"
         }
@@ -80,6 +81,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .budget: return "creditcard"
         case .marriage: return "heart"
         case .family: return "person.2"
+        case .food: return "fork.knife"
         case .calendar: return "calendar"
         case .vacations: return "paperplane"
         }
@@ -91,6 +93,7 @@ enum AppTab: String, CaseIterable, Identifiable {
         case .budget: return "creditcard.fill"
         case .marriage: return "heart.fill"
         case .family: return "person.2.fill"
+        case .food: return "fork.knife"
         case .calendar: return "calendar"
         case .vacations: return "paperplane.fill"
         }

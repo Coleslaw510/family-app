@@ -53,7 +53,66 @@ final class APIClient {
         try await send("DELETE", path, data: nil)
     }
 
-    private func send<T: Decodable>(_ method: String, _ path: String, data: Data?) async throws -> T {
+    func upload<T: Decodable>(
+        _ path: String,
+        filename: String,
+        data fileData: Data,
+        mime: String,
+        fields: [String: String] = [:]
+    ) async throws -> T {
+        let boundary = "FamilyApp-\(UUID().uuidString)"
+        var body = Data()
+        for (key, value) in fields {
+            body.append(Data("--\(boundary)\r\n".utf8))
+            body.append(Data("Content-Disposition: form-data; name=\"\(key)\"\r\n\r\n".utf8))
+            body.append(Data(value.utf8))
+            body.append(Data("\r\n".utf8))
+        }
+        body.append(Data("--\(boundary)\r\n".utf8))
+        body.append(Data("Content-Disposition: form-data; name=\"file\"; filename=\"\(filename)\"\r\n".utf8))
+        body.append(Data("Content-Type: \(mime)\r\n\r\n".utf8))
+        body.append(fileData)
+        body.append(Data("\r\n--\(boundary)--\r\n".utf8))
+        return try await send("POST", path, data: body, contentType: "multipart/form-data; boundary=\(boundary)", timeout: 60)
+    }
+
+    func postForm<T: Decodable>(_ path: String, fields: [String: String]) async throws -> T {
+        let boundary = "FamilyApp-\(UUID().uuidString)"
+        var body = Data()
+        for (key, value) in fields {
+            body.append(Data("--\(boundary)\r\n".utf8))
+            body.append(Data("Content-Disposition: form-data; name=\"\(key)\"\r\n\r\n".utf8))
+            body.append(Data(value.utf8))
+            body.append(Data("\r\n".utf8))
+        }
+        body.append(Data("--\(boundary)--\r\n".utf8))
+        return try await send("POST", path, data: body, contentType: "multipart/form-data; boundary=\(boundary)", timeout: 60)
+    }
+
+    func uploadForm<T: Decodable>(_ path: String, fields: [String: String], fileField: String, filename: String, data fileData: Data, mime: String) async throws -> T {
+        let boundary = "FamilyApp-\(UUID().uuidString)"
+        var body = Data()
+        for (key, value) in fields {
+            body.append(Data("--\(boundary)\r\n".utf8))
+            body.append(Data("Content-Disposition: form-data; name=\"\(key)\"\r\n\r\n".utf8))
+            body.append(Data(value.utf8))
+            body.append(Data("\r\n".utf8))
+        }
+        body.append(Data("--\(boundary)\r\n".utf8))
+        body.append(Data("Content-Disposition: form-data; name=\"\(fileField)\"; filename=\"\(filename)\"\r\n".utf8))
+        body.append(Data("Content-Type: \(mime)\r\n\r\n".utf8))
+        body.append(fileData)
+        body.append(Data("\r\n--\(boundary)--\r\n".utf8))
+        return try await send("POST", path, data: body, contentType: "multipart/form-data; boundary=\(boundary)", timeout: 60)
+    }
+
+    private func send<T: Decodable>(
+        _ method: String,
+        _ path: String,
+        data: Data?,
+        contentType: String = "application/json",
+        timeout: TimeInterval = 30
+    ) async throws -> T {
         let root = baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         let auth = token
         guard let url = URL(string: root + path) else {
@@ -61,11 +120,11 @@ final class APIClient {
         }
         var request = URLRequest(url: url)
         request.httpMethod = method
-        request.timeoutInterval = 30
+        request.timeoutInterval = timeout
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if let data {
             request.httpBody = data
-            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue(contentType, forHTTPHeaderField: "Content-Type")
         }
         if let auth, !auth.isEmpty {
             request.setValue("Bearer \(auth)", forHTTPHeaderField: "Authorization")

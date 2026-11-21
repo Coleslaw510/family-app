@@ -309,8 +309,160 @@ def many(conn: sqlite3.Connection, sql: str, args: tuple = ()):
     return conn.execute(sql, args).fetchall()
 
 
+V11_SQL = """
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    version INTEGER PRIMARY KEY,
+    applied_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS category_rules (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL,
+    pattern TEXT NOT NULL,
+    category_id TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_rules_family ON category_rules(family_id);
+
+CREATE TABLE IF NOT EXISTS import_sessions (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL,
+    member_id TEXT NOT NULL,
+    filename TEXT,
+    headers_json TEXT NOT NULL,
+    rows_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS calendar_feeds (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    color TEXT NOT NULL,
+    url TEXT NOT NULL,
+    last_fetched_at TEXT,
+    last_error TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_feeds_family ON calendar_feeds(family_id);
+
+CREATE TABLE IF NOT EXISTS feed_events (
+    id TEXT PRIMARY KEY,
+    feed_id TEXT NOT NULL,
+    uid TEXT NOT NULL,
+    title TEXT NOT NULL,
+    starts_at TEXT NOT NULL,
+    ends_at TEXT,
+    all_day INTEGER NOT NULL DEFAULT 0,
+    location TEXT,
+    UNIQUE (feed_id, uid)
+);
+CREATE INDEX IF NOT EXISTS idx_feed_events_feed ON feed_events(feed_id, starts_at);
+
+CREATE TABLE IF NOT EXISTS mortgages (
+    family_id TEXT PRIMARY KEY,
+    loan_cents INTEGER NOT NULL,
+    annual_rate_percent REAL NOT NULL,
+    term_months INTEGER NOT NULL,
+    start_date TEXT NOT NULL,
+    payment_cents INTEGER NOT NULL,
+    extra_cents INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS home_profiles (
+    family_id TEXT PRIMARY KEY,
+    address TEXT,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS home_values (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL,
+    valued_on TEXT NOT NULL,
+    value_cents INTEGER NOT NULL,
+    source TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_home_values_family ON home_values(family_id, valued_on);
+
+CREATE TABLE IF NOT EXISTS integration_status (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS food_goals (
+    member_id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL,
+    calories INTEGER NOT NULL,
+    protein INTEGER NOT NULL,
+    carbs INTEGER NOT NULL,
+    fat INTEGER NOT NULL,
+    water INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS food_entries (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL,
+    member_id TEXT NOT NULL,
+    day_on TEXT NOT NULL,
+    name TEXT NOT NULL,
+    meal TEXT NOT NULL,
+    calories INTEGER NOT NULL,
+    protein INTEGER NOT NULL,
+    carbs INTEGER NOT NULL,
+    fat INTEGER NOT NULL,
+    serving TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_food_member_day ON food_entries(member_id, day_on);
+
+CREATE TABLE IF NOT EXISTS food_favorites (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL,
+    member_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    meal TEXT NOT NULL,
+    calories INTEGER NOT NULL,
+    protein INTEGER NOT NULL,
+    carbs INTEGER NOT NULL,
+    fat INTEGER NOT NULL,
+    serving TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_fav_member ON food_favorites(member_id);
+
+CREATE TABLE IF NOT EXISTS water_logs (
+    member_id TEXT NOT NULL,
+    day_on TEXT NOT NULL,
+    cups INTEGER NOT NULL,
+    PRIMARY KEY (member_id, day_on)
+);
+
+CREATE TABLE IF NOT EXISTS dinner_plans (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL,
+    day_on TEXT NOT NULL,
+    title TEXT NOT NULL,
+    notes TEXT,
+    created_by TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_dinner_family ON dinner_plans(family_id, day_on);
+"""
+
+
 def init_db(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
+    conn.executescript(V11_SQL)
+    row = conn.execute("SELECT 1 FROM schema_migrations WHERE version = 11").fetchone()
+    if row is None:
+        conn.execute(
+            "INSERT INTO schema_migrations (version, applied_at) VALUES (11, ?)",
+            (now_iso(),),
+        )
 
 
 @contextmanager

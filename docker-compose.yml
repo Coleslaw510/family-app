@@ -2,9 +2,13 @@ services:
   app:
     build: ./server
     restart: unless-stopped
+    env_file:
+      - path: ${FAMILY_APP_SECRETS:-/home/ubuntu/.config/family-app/secrets.env}
+        required: false
     environment:
       PORT: "8000"
       DB_PATH: /data/family.db
+      FEED_POLL_SECONDS: "900"
       JOIN_CODE_TTL_HOURS: "24"
       JOIN_MAX_ATTEMPTS: "8"
       JOIN_WINDOW_SECONDS: "900"

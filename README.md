@@ -174,11 +174,33 @@ Join codes are stored as SHA-256 hashes. Failed join attempts are rate-limited p
 
 Pace is `on_pace`, `watch`, `over`, or `no_budget`. Safe-to-spend is what's left after upcoming unpaid bills this month, divided by the days left. Insights are rules (over budget, a bill due soon, a category running under its older average). They are not a model.
 
-## Left for 1.1
+## Version 1.1
 
-- Bank sync (SimpleFIN). Accounts are typed in by hand for now. The Budget screen says so.
-- AI insights. The amber insight cards are the rules above. The screen says a model comes later.
-- Google Calendar sync. Family events are stored here. The Calendar screen says sync comes later.
+Additive only. Existing families, events, and trips stay in the SQLite file. New tables are created beside them; nothing is dropped.
+
+Server environment (never commit the values):
+
+| Variable | Purpose |
+| --- | --- |
+| `GEMINI_API_KEY` | Budget questions and meal estimates. Server only. |
+| `GEMINI_MODEL` | Optional. Defaults to `gemini-3.1-flash-lite`. |
+| `RENTCAST_API_KEY` | Optional monthly home-value lookup. If the key is missing or RentCast rejects it, the app stays quiet. |
+| `FEED_POLL_SECONDS` | How often iCal feeds are fetched. Default 900. |
+| `FAMILY_APP_SECRETS` | Optional path to the secrets file. Compose defaults to `/home/ubuntu/.config/family-app/secrets.env`. |
+
+Put the keys in `/home/ubuntu/.config/family-app/secrets.env` (mode 600). Compose loads that file with `required: false`, so a missing file does not stop the stack.
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+Calendar feed addresses are stored on the server and only a masked host is sent back to the phone. They are not written to logs.
+
+## Not in 1.1
+
+- SimpleFIN bank sync. Import a CSV or Excel export instead.
+- Google Calendar two-way sync. Read-only iCal feeds are in 1.1.
 
 ## Design notes that aren't on the mockups
 

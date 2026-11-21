@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import calendar
 import ipaddress
 import logging
 import os
 import secrets
+import sqlite3
 import time
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
@@ -20,7 +22,7 @@ from . import budget as budget_math
 from .db import db, hash_secret, many, month_bounds, new_id, now_iso, one, plus_days, plus_hours, seed_categories
 
 log = logging.getLogger("family")
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 EXTRA_COLORS = ["#2563eb", "#0f766e", "#b45309", "#0369a1", "#7c3aed", "#be185d", "#ea580c", "#475569"]
 
@@ -45,8 +47,14 @@ def create_app() -> FastAPI:
     async def lifespan(app: FastAPI):
         with db():
             pass
+        from .v11 import feed_poller
+
+        poller = asyncio.create_task(feed_poller())
         log.info("Family App API %s ready", VERSION)
-        yield
+        try:
+            yield
+        finally:
+            poller.cancel()
 
     app = FastAPI(title="Family App", version=VERSION, lifespan=lifespan)
     app.add_middleware(
@@ -251,28 +259,57 @@ def create_app() -> FastAPI:
             if body.default_budget_cents is not None:
                 check_cents(body.default_budget_cents)
                 default_budget = body.default_budget_cents
+            sort_order = row["sort_order"] if body.sort_order is None else int(body.sort_order)
             conn.execute(
                 """
                 UPDATE categories
-                SET name = ?, color = ?, icon = ?, default_budget_cents = ?
+                SET name = ?, color = ?, icon = ?, default_budget_cents = ?, sort_order = ?
                 WHERE id = ?
                 """,
-                (name, color, icon, default_budget, category_id),
+                (name, color, icon, default_budget, sort_order, category_id),
             )
             row = one(conn, "SELECT * FROM categories WHERE id = ?", (category_id,))
         return category_out(row)
 
     @app.delete("/v1/categories/{category_id}")
-    def delete_category(category_id: str, auth=Depends(require_user)):
+    def delete_category(
+        category_id: str,
+        reassign_to: str | None = None,
+        auth=Depends(require_user),
+    ):
         with db() as conn:
             own_category(conn, auth["family_id"], category_id)
+            count = one(
+                conn,
+                "SELECT COUNT(*) AS n FROM transactions WHERE family_id = ? AND category_id = ?",
+                (auth["family_id"], category_id),
+            )
+            txn_count = int(count["n"])
+            if txn_count and reassign_to is None:
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "message": "Choose where this category's transactions should go.",
+                        "transaction_count": txn_count,
+                    },
+                )
+            target = None
+            if reassign_to and reassign_to not in {"uncategorized", "none"}:
+                if reassign_to == category_id:
+                    raise HTTPException(400, "Pick a different category.")
+                own_category(conn, auth["family_id"], reassign_to)
+                target = reassign_to
             conn.execute(
-                "UPDATE transactions SET category_id = NULL WHERE category_id = ? AND family_id = ?",
+                "UPDATE transactions SET category_id = ? WHERE category_id = ? AND family_id = ?",
+                (target, category_id, auth["family_id"]),
+            )
+            conn.execute(
+                "DELETE FROM category_rules WHERE category_id = ? AND family_id = ?",
                 (category_id, auth["family_id"]),
             )
             conn.execute("DELETE FROM category_budgets WHERE category_id = ?", (category_id,))
             conn.execute("DELETE FROM categories WHERE id = ?", (category_id,))
-        return {"ok": True}
+        return {"ok": True, "moved": txn_count, "reassign_to": target}
 
     @app.put("/v1/categories/{category_id}/budget")
     def put_budget(category_id: str, body: BudgetSetIn, auth=Depends(require_user)):
@@ -1176,6 +1213,9 @@ def create_app() -> FastAPI:
             conn.execute("DELETE FROM itinerary_items WHERE id = ?", (item_id,))
         return {"ok": True}
 
+    from .v11 import register_v11
+
+    register_v11(app)
     return app
 
 
@@ -1218,6 +1258,7 @@ class CategoryPatch(BaseModel):
     color: str | None = None
     icon: str | None = None
     default_budget_cents: int | None = None
+    sort_order: int | None = None
 
 
 class BudgetSetIn(BaseModel):
@@ -1978,6 +2019,43 @@ def household_bundle(conn, family_id: str) -> dict:
     }
 
 
+def _feed_events(conn, family_id: str, start: str | None, end: str | None) -> list[dict]:
+    try:
+        sql = """
+            SELECT e.*, f.color AS feed_color, f.name AS feed_name
+            FROM feed_events e
+            JOIN calendar_feeds f ON f.id = e.feed_id
+            WHERE f.family_id = ?
+        """
+        args: list = [family_id]
+        if start:
+            sql += " AND e.starts_at >= ?"
+            args.append(start)
+        if end:
+            sql += " AND e.starts_at <= ?"
+            args.append(end if "T" in end else end + "T23:59:59")
+        sql += " ORDER BY e.starts_at LIMIT 400"
+        rows = many(conn, sql, tuple(args))
+    except sqlite3.OperationalError:
+        return []
+    return [
+        {
+            "id": "feed:" + row["id"],
+            "title": row["title"],
+            "starts_at": row["starts_at"],
+            "ends_at": row["ends_at"],
+            "all_day": bool(row["all_day"]),
+            "location": row["location"],
+            "notes": row["feed_name"],
+            "color": row["feed_color"],
+            "created_by": None,
+            "source": "feed",
+            "read_only": True,
+        }
+        for row in rows
+    ]
+
+
 def events_between(conn, family_id: str, start: str | None, end: str | None) -> list[dict]:
     sql = "SELECT * FROM events WHERE family_id = ?"
     args: list = [family_id]
@@ -2000,9 +2078,11 @@ def events_between(conn, family_id: str, start: str | None, end: str | None) -> 
             "notes": r["notes"],
             "color": r["color"],
             "created_by": r["created_by"],
+            "source": "family",
+            "read_only": False,
         }
         for r in rows
-    ]
+    ] + _feed_events(conn, family_id, start, end)
 
 
 def all_trips(conn, family_id: str) -> list[dict]:

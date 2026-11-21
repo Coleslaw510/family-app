@@ -47,6 +47,8 @@ struct MainShell: View {
                     MarriageView()
                 case .family:
                     FamilyBoardView()
+                case .food:
+                    FoodTabView()
                 case .calendar:
                     CalendarView()
                 case .vacations:

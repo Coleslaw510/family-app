@@ -1,0 +1,20 @@
+{
+  "type": "OBJECT",
+  "properties": {
+    "meal_name": { "type": "STRING" },
+    "items": {
+      "type": "ARRAY",
+      "items": {
+        "type": "OBJECT",
+        "properties": { "name": { "type": "STRING" }, "estimated_portion": { "type": "STRING" } },
+        "required": ["name", "estimated_portion"]
+      }
+    },
+    "calories": { "type": "NUMBER" },
+    "protein_g": { "type": "NUMBER" },
+    "carbs_g": { "type": "NUMBER" },
+    "fat_g": { "type": "NUMBER" },
+    "confidence": { "type": "NUMBER" }
+  },
+  "required": ["meal_name", "items", "calories", "protein_g", "carbs_g", "fat_g", "confidence"]
+}
