@@ -21,7 +21,7 @@ struct HomeView: View {
             .padding(.bottom, 16)
         }
         .background(Theme.bg)
-        .refreshable { await app.refreshAll() }
+        .refreshable { await app.pullToRefresh() }
         .sheet(isPresented: $settings) { SettingsView() }
     }
 

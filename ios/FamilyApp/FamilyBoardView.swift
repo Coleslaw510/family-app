@@ -47,7 +47,7 @@ struct FamilyBoardView: View {
             .padding(.bottom, 24)
         }
         .background(Theme.bg)
-        .refreshable { await app.refreshAll() }
+        .refreshable { await app.pullToRefresh() }
         .sheet(item: $sheet) { item in
             Group {
                 switch item {
@@ -188,7 +188,7 @@ struct FamilyBoardView: View {
             let _: JSONAck = try await app.api.delete(path)
             await app.refreshAll(silent: true)
         } catch {
-            app.banner = error.localizedDescription
+            app.report(error)
         }
     }
 }

@@ -506,7 +506,7 @@ struct Screen<Content: View>: View {
             .padding(.bottom, 28)
         }
         .background(Theme.bg)
-        .refreshable { await app.refreshAll() }
+        .refreshable { await app.pullToRefresh() }
         .sheet(isPresented: $settings) { SettingsView() }
     }
 }

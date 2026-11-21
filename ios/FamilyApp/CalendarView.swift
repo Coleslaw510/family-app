@@ -97,7 +97,7 @@ struct CalendarView: View {
             .padding(.bottom, 24)
         }
         .background(Theme.bg)
-        .refreshable { await app.refreshAll() }
+        .refreshable { await app.pullToRefresh() }
         .sheet(item: $sheet) { item in
             Group {
                 switch item {

@@ -29,6 +29,7 @@ final class AppModel: ObservableObject {
     let api = APIClient()
     private var token: String?
     private var poll: Timer?
+    private var refreshTask: Task<Void, Never>?
 
     init() {
         let stored = UserDefaults.standard.string(forKey: "serverURL")
@@ -133,24 +134,52 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Pull-to-refresh entry point. SwiftUI cancels a `.refreshable` task as soon as the screen
+    /// re-renders (which our own data updates cause), so the work runs in its own task that the
+    /// gesture only waits on. A cancelled refresh is never reported as an error.
+    func pullToRefresh() async {
+        await Task { await self.refreshAll() }.value
+    }
+
     func refreshAll(silent: Bool = false) async {
+        // Let an in-flight refresh finish first so two refreshes never race each other,
+        // then load fresh data (the earlier one may predate a change the user just made).
+        while let running = refreshTask {
+            await running.value
+        }
+        let task = Task { await self.performRefresh(silent: silent) }
+        refreshTask = task
+        await task.value
+        if refreshTask == task { refreshTask = nil }
+    }
+
+    private func performRefresh(silent: Bool) async {
         do {
             let today = Dates.isoDay(Date())
-            let dash: Dashboard = try await api.get("/v1/dashboard?today=\(today)")
+            let month = budgetMonth
+            let api = self.api
+            async let dashCall: Dashboard = api.get("/v1/dashboard?today=\(today)")
+            async let budgetCall: BudgetSnapshot = api.get("/v1/budget?month=\(month)&today=\(today)")
+            async let marriageCall: MarriageBundle = api.get("/v1/marriage")
+            async let householdCall: Household = api.get("/v1/household")
+            async let eventCall: EventList = api.get("/v1/events")
+            async let tripCall: TripList = api.get("/v1/trips")
+            let (dash, budgetData, marriageData, householdData, eventList, tripList) =
+                try await (dashCall, budgetCall, marriageCall, householdCall, eventCall, tripCall)
+            // Publish everything in one go so the screen redraws once, after all calls finish.
             dashboard = dash
             family = dash.family
             member = dash.member
             members = dash.members
-            budget = try await api.get("/v1/budget?month=\(budgetMonth)&today=\(today)")
-            marriage = try await api.get("/v1/marriage")
-            household = try await api.get("/v1/household")
-            let eventList: EventList = try await api.get("/v1/events")
+            if month == budgetMonth { budget = budgetData }
+            marriage = marriageData
+            household = householdData
             events = eventList.events
-            let tripList: TripList = try await api.get("/v1/trips")
             trips = tripList.trips
             lastSynced = Date()
             banner = nil
         } catch {
+            if error.isCancellation { return }
             if silent {
                 if let apiError = error as? APIError, apiError.unauthorized { handle(error) }
             } else {
@@ -261,7 +290,13 @@ final class AppModel: ObservableObject {
         tab = .home
     }
 
+    /// Show an error from a screen action. Cancelled requests stay silent.
+    func report(_ error: Error) {
+        handle(error)
+    }
+
     private func handle(_ error: Error) {
+        if error.isCancellation { return }
         if let apiError = error as? APIError, apiError.unauthorized {
             signOut()
             banner = apiError.message

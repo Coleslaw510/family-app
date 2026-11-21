@@ -49,7 +49,7 @@ struct MarriageView: View {
             .padding(.bottom, 24)
         }
         .background(Theme.bg)
-        .refreshable { await app.refreshAll() }
+        .refreshable { await app.pullToRefresh() }
         .sheet(item: $sheet) { item in
             Group {
                 switch item {
@@ -336,7 +336,7 @@ struct MarriageView: View {
             Haptics.success()
             await app.refreshAll(silent: true)
         } catch {
-            app.banner = error.localizedDescription
+            app.report(error)
         }
     }
 
@@ -350,7 +350,7 @@ struct MarriageView: View {
             Haptics.success()
             await app.refreshAll(silent: true)
         } catch {
-            app.banner = error.localizedDescription
+            app.report(error)
         }
     }
 
@@ -359,7 +359,7 @@ struct MarriageView: View {
             let _: JSONAck = try await app.api.delete("/v1/birthdays/\(birthday.id)")
             await app.refreshAll(silent: true)
         } catch {
-            app.banner = error.localizedDescription
+            app.report(error)
         }
     }
 
@@ -368,7 +368,7 @@ struct MarriageView: View {
             let _: JSONAck = try await app.api.delete("/v1/love-notes/\(note.id)")
             await app.refreshAll(silent: true)
         } catch {
-            app.banner = error.localizedDescription
+            app.report(error)
         }
     }
 }

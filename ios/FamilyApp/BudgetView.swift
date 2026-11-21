@@ -68,7 +68,7 @@ struct BudgetView: View {
                 .padding(.bottom, 80)
             }
             .background(Theme.bg)
-            .refreshable { await app.refreshAll() }
+            .refreshable { await app.pullToRefresh() }
 
             Button {
                 sheet = .addTxn

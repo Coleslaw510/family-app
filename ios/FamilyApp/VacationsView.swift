@@ -49,7 +49,7 @@ struct VacationsView: View {
                 .padding(.bottom, 24)
             }
             .background(Theme.bg)
-            .refreshable { await app.refreshAll() }
+            .refreshable { await app.pullToRefresh() }
             .toolbar(.hidden, for: .navigationBar)
         }
         .sheet(item: $sheet) { item in
@@ -244,7 +244,7 @@ struct TripDetailView: View {
             let _: JSONAck = try await app.api.post("/v1/trips/\(tripId)/packing", body: TitleBody(title: title))
             await app.refreshAll(silent: true)
         } catch {
-            app.banner = error.localizedDescription
+            app.report(error)
         }
     }
 
@@ -261,7 +261,7 @@ struct TripDetailView: View {
             )
             await app.refreshAll(silent: true)
         } catch {
-            app.banner = error.localizedDescription
+            app.report(error)
         }
     }
 
@@ -270,7 +270,7 @@ struct TripDetailView: View {
             let _: JSONAck = try await app.api.delete(path)
             await app.refreshAll(silent: true)
         } catch {
-            app.banner = error.localizedDescription
+            app.report(error)
         }
     }
 
@@ -280,7 +280,7 @@ struct TripDetailView: View {
             await app.refreshAll(silent: true)
             dismiss()
         } catch {
-            app.banner = error.localizedDescription
+            app.report(error)
         }
     }
 }
