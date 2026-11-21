@@ -1,0 +1,6 @@
+# Host install (systemd), not the Docker network.
+# Install Caddy, then: sudo cp deploy/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy
+132-145-159-218.sslip.io {
+	encode gzip
+	reverse_proxy 127.0.0.1:8000
+}
