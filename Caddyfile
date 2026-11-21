@@ -1,0 +1,4 @@
+132-145-159-218.sslip.io {
+	encode gzip
+	reverse_proxy app:8000
+}

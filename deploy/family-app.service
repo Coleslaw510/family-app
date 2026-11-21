@@ -1,0 +1,22 @@
+[Unit]
+Description=Family App API
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/family-app/server
+Environment=PORT=8000
+Environment=DB_PATH=/var/lib/family-app/family.db
+Environment=JOIN_CODE_TTL_HOURS=24
+Environment=JOIN_MAX_ATTEMPTS=8
+Environment=JOIN_WINDOW_SECONDS=900
+Environment=CREATE_MAX_ATTEMPTS=8
+Environment=SESSION_DAYS=400
+Environment=FEED_POLL_SECONDS=900
+EnvironmentFile=-/home/ubuntu/.config/family-app/secrets.env
+ExecStart=/opt/family-app/server/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

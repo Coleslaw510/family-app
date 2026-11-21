@@ -1,0 +1,12 @@
+date,merchant,amount,category
+2026-01-03,Market Fresh,92.15,Groceries
+2026-01-08,City Fuel,48.20,Fuel
+2026-01-12,River Kitchen,36.40,Dining
+2026-01-15,Harbor Power,140.00,Bills / Utilities
+2026-02-04,Market Fresh,88.02,Groceries
+2026-02-09,City Fuel,51.77,Fuel
+2026-02-14,River Kitchen,64.00,Dining
+2026-02-18,Phone plan,89.00,Bills / Utilities
+2026-03-02,County Market,101.44,Groceries
+2026-03-11,City Fuel,46.10,Fuel
+2026-03-19,Oak & Iron,22.00,Shopping
