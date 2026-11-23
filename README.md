@@ -54,8 +54,17 @@ Config is environment variables:
 | `CREATE_MAX_ATTEMPTS` | `8` | New families per IP per window |
 | `CREATE_WINDOW_SECONDS` | `3600` | Create-family window |
 | `SESSION_DAYS` | `400` | Bearer token lifetime |
+| `SIMPLEFIN_ENCRYPTION_KEY` | unset | Required Fernet key used to encrypt each household's SimpleFIN Access URL on the server |
 
 Amounts are integer cents. Dates are `YYYY-MM-DD`. Times are `YYYY-MM-DDTHH:MM:SS` in the household's local clock, stored as text and shown back the same way.
+
+### SimpleFIN (v1.3)
+
+Before connecting, configure `SIMPLEFIN_ENCRYPTION_KEY` in the server secrets file (`/home/ubuntu/.config/family-app/secrets.env` for the Compose setup). Generate it once on the server with the app's Python environment using `python3 -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'`, then store the value as `SIMPLEFIN_ENCRYPTION_KEY=<generated-value>` in that secrets file and restrict the file to its service administrator (`chmod 600`). Keep a secure backup of this key: changing or losing it makes already-encrypted Access URLs unreadable. Do not commit the key or put it in the iOS app.
+
+After the v1.3 server is deployed over HTTPS, open **Settings → SimpleFIN** in the app and enter a fresh SimpleFIN Setup Token there. Do not send the Setup Token or Access URL in chat, email, or logs. The phone submits the token only to the authenticated server; the Access URL is encrypted at rest and is never returned to iOS. The server fetches transactions automatically about once per day, uses a five-day overlap and provider transaction IDs to avoid duplicates, and offers an explicit **Sync now** control. Previously imported transactions remain in the budget after disconnect.
+
+The integration endpoints are `GET /v1/simplefin/status`, `POST /v1/simplefin/connect`, `POST /v1/simplefin/sync`, and `DELETE /v1/simplefin/connection`; all require normal family authentication. The local v1.3 source branch is not deployed to the Oracle VM by this change.
 
 ### Docker Compose (ARM or x86)
 
@@ -174,6 +183,10 @@ Join codes are stored as SHA-256 hashes. Failed join attempts are rate-limited p
 
 Pace is `on_pace`, `watch`, `over`, or `no_budget`. Safe-to-spend is what's left after upcoming unpaid bills this month, divided by the days left. Insights are rules (over budget, a bill due soon, a category running under its older average). They are not a model.
 
+## Version 1.3
+
+Adds authenticated SimpleFIN connection, encrypted server-side Access URL storage, household-scoped sync/status/disconnect endpoints, scheduler checks with a minimum 20-hour automatic-sync interval, a five-day transaction overlap, request throttling, provider-ID deduplication, and the Settings setup flow. The migration only adds tables; existing families and transactions are preserved. The calendar announcement and stale Google Calendar label are removed.
+
 ## Version 1.2
 
 Presentation-only refresh of the iOS app: native system tab navigation, adaptive grouped glass/material cards, capsule and tinted icon buttons, a native grouped Settings form, and tappable Home section headers. Liquid Glass effects are used on iOS 26 and newer; earlier supported iOS versions retain system-material and native button fallbacks. No server, data, or domain feature changes.
@@ -191,6 +204,7 @@ Server environment (never commit the values):
 | `RENTCAST_API_KEY` | Optional monthly home-value lookup. If the key is missing or RentCast rejects it, the app stays quiet. |
 | `FEED_POLL_SECONDS` | How often iCal feeds are fetched. Default 900. |
 | `FAMILY_APP_SECRETS` | Optional path to the secrets file. Compose defaults to `/home/ubuntu/.config/family-app/secrets.env`. |
+| `SIMPLEFIN_ENCRYPTION_KEY` | Required to connect SimpleFIN; encrypts Access URLs on the server. |
 
 Put the keys in `/home/ubuntu/.config/family-app/secrets.env` (mode 600). Compose loads that file with `required: false`, so a missing file does not stop the stack.
 
@@ -200,11 +214,6 @@ docker compose up -d --build
 ```
 
 Calendar feed addresses are stored on the server and only a masked host is sent back to the phone. They are not written to logs.
-
-## Not in 1.1
-
-- SimpleFIN bank sync. Import a CSV or Excel export instead.
-- Google Calendar two-way sync. Read-only iCal feeds are in 1.1.
 
 ## Design notes that aren't on the mockups
 

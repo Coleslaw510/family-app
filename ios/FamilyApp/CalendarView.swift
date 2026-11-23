@@ -34,14 +34,6 @@ struct CalendarView: View {
                     TintedIconButton(system: "dot.radiowaves.left.and.right", title: "Calendar feeds", tint: Theme.muted) { sheet = .feeds }
                 }
                 Card {
-                    HStack(spacing: 8) {
-                        Circle().fill(Color(hex: 0x4285F4)).frame(width: 8, height: 8)
-                        Text("Google Calendar sync coming in 1.1")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Theme.muted)
-                    }
-                }
-                Card {
                     VStack(spacing: 10) {
                         HStack {
                             TintedIconButton(system: "chevron.left", title: "Previous month") { shift(-1) }

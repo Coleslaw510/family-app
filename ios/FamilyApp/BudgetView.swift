@@ -667,11 +667,11 @@ struct BudgetView: View {
                     Spacer()
                     TintedIconButton(system: "plus", title: "Add account") { sheet = .addAccount }
                 }
-                Text("SimpleFIN is not in this version. " + snapshot.placeholders.bankSync)
+                Text("Connect SimpleFIN in Settings to sync transactions automatically.")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(Theme.soft)
                 if snapshot.accounts.isEmpty {
-                    Text("Add balances by hand until bank sync arrives.")
+                    Text("No accounts added yet.")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(Theme.muted)
                 }

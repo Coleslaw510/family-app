@@ -79,6 +79,29 @@ struct IntegrationsStatus: Decodable {
     var feeds: [CalendarFeed]
 }
 
+struct SimpleFINStatus: Decodable {
+    var connected: Bool
+    var encryptionConfigured: Bool
+    var lastSyncedAt: String?
+    var lastError: String?
+}
+
+struct SimpleFINConnectBody: Encodable {
+    var setupToken: String
+}
+
+struct SimpleFINConnectResult: Decodable {
+    var connected: Bool
+    var message: String
+}
+
+struct SimpleFINSyncResult: Decodable {
+    var ok: Bool
+    var imported: Int
+    var skipped: Int
+    var lastSyncedAt: String?
+}
+
 struct HomeValuePoint: Decodable, Identifiable {
     var id: String
     var valuedOn: String

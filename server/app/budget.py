@@ -231,7 +231,7 @@ def build_budget(conn, family_id: str, month: str, today: date) -> dict:
         "insights": insights,
         "import_count": int(import_count),
         "placeholders": {
-            "bank_sync": "Import a bank or card export (CSV or Excel).",
+            "bank_sync": "Connect SimpleFIN in Settings to sync transactions automatically.",
             "ai": "Ask Gemini for a closer look when a key is configured on the server.",
         },
     }

@@ -22,7 +22,7 @@ from . import budget as budget_math
 from .db import db, hash_secret, many, month_bounds, new_id, now_iso, one, plus_days, plus_hours, seed_categories
 
 log = logging.getLogger("family")
-VERSION = "1.1.0"
+VERSION = "1.3.0"
 ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 EXTRA_COLORS = ["#2563eb", "#0f766e", "#b45309", "#0369a1", "#7c3aed", "#be185d", "#ea580c", "#475569"]
 
@@ -48,13 +48,16 @@ def create_app() -> FastAPI:
         with db():
             pass
         from .v11 import feed_poller
+        from .simplefin import simplefin_poller
 
         poller = asyncio.create_task(feed_poller())
+        simplefin_task = asyncio.create_task(simplefin_poller())
         log.info("Family App API %s ready", VERSION)
         try:
             yield
         finally:
             poller.cancel()
+            simplefin_task.cancel()
 
     app = FastAPI(title="Family App", version=VERSION, lifespan=lifespan)
     app.add_middleware(
@@ -1214,8 +1217,10 @@ def create_app() -> FastAPI:
         return {"ok": True}
 
     from .v11 import register_v11
+    from .simplefin import register_routes as register_simplefin_routes
 
     register_v11(app)
+    register_simplefin_routes(app, require_user)
     return app
 
 

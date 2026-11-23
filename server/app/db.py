@@ -453,6 +453,27 @@ CREATE TABLE IF NOT EXISTS dinner_plans (
 CREATE INDEX IF NOT EXISTS idx_dinner_family ON dinner_plans(family_id, day_on);
 """
 
+SIMPLEFIN_SQL = """
+CREATE TABLE IF NOT EXISTS simplefin_connections (
+    family_id TEXT PRIMARY KEY,
+    connection_id TEXT NOT NULL UNIQUE,
+    access_url_encrypted TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    last_synced_at TEXT,
+    last_attempt_at TEXT,
+    last_error TEXT
+);
+CREATE TABLE IF NOT EXISTS simplefin_transaction_ids (
+    family_id TEXT NOT NULL,
+    connection_id TEXT NOT NULL,
+    account_identity TEXT NOT NULL,
+    transaction_identity TEXT NOT NULL,
+    transaction_id TEXT NOT NULL,
+    PRIMARY KEY (family_id, connection_id, account_identity, transaction_identity)
+);
+CREATE INDEX IF NOT EXISTS idx_simplefin_txn_transaction ON simplefin_transaction_ids(transaction_id);
+"""
+
 
 def init_db(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
@@ -463,6 +484,22 @@ def init_db(conn: sqlite3.Connection) -> None:
             "INSERT INTO schema_migrations (version, applied_at) VALUES (11, ?)",
             (now_iso(),),
         )
+    conn.commit()
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        for statement in SIMPLEFIN_SQL.split(";"):
+            if statement.strip():
+                conn.execute(statement)
+        row = conn.execute("SELECT 1 FROM schema_migrations WHERE version = 12").fetchone()
+        if row is None:
+            conn.execute(
+                "INSERT INTO schema_migrations (version, applied_at) VALUES (12, ?)",
+                (now_iso(),),
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
 
 
 @contextmanager

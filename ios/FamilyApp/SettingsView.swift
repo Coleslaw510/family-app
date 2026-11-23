@@ -9,6 +9,11 @@ struct SettingsView: View {
     @State private var code: String?
     @State private var showCode = false
     @State private var integrations: IntegrationsStatus?
+    @State private var simplefin: SimpleFINStatus?
+    @State private var setupToken = ""
+    @State private var simplefinBusy = false
+    @State private var simplefinNotice: String?
+    @State private var showDisconnectConfirmation = false
 
     var body: some View {
         NavigationStack {
@@ -87,6 +92,58 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    HStack {
+                        Text("Connection")
+                        Spacer()
+                        Text(simplefin?.connected == true ? "Connected" : "Not connected")
+                            .foregroundStyle(simplefin?.connected == true ? Theme.good : Theme.muted)
+                    }
+                    if let lastSyncedAt = simplefin?.lastSyncedAt {
+                        LabeledContent("Last synced", value: lastSyncedAt)
+                    }
+                    if let lastError = simplefin?.lastError {
+                        Text(lastError)
+                            .font(.footnote)
+                            .foregroundStyle(.red)
+                    }
+                    if simplefin?.connected == true {
+                        Button {
+                            Task { await syncSimpleFIN() }
+                        } label: {
+                            Label(simplefinBusy ? "Syncing…" : "Sync now", systemImage: "arrow.triangle.2.circlepath")
+                        }
+                        .disabled(simplefinBusy)
+                        Button("Disconnect SimpleFIN", role: .destructive) {
+                            showDisconnectConfirmation = true
+                        }
+                        .disabled(simplefinBusy)
+                    } else if simplefin?.encryptionConfigured == true {
+                        SecureField("SimpleFIN Setup Token", text: $setupToken)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                        Button {
+                            Task { await connectSimpleFIN() }
+                        } label: {
+                            Label(simplefinBusy ? "Connecting…" : "Connect SimpleFIN", systemImage: "link")
+                        }
+                        .disabled(simplefinBusy || setupToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    } else {
+                        Text("Server setup is required before connecting. Configure SIMPLEFIN_ENCRYPTION_KEY on the server.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    if let simplefinNotice {
+                        Text(simplefinNotice)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                } header: {
+                    Text("SimpleFIN")
+                } footer: {
+                    Text("Enter the Setup Token here, not in chat. It is cleared after submission. The Access URL stays encrypted on the server and is never stored on this phone.")
+                }
+
+                Section {
                     Button("Log out", role: .destructive) {
                         app.signOut()
                         dismiss()
@@ -110,12 +167,21 @@ struct SettingsView: View {
             }
             .task {
                 integrations = try? await app.api.get("/v1/integrations")
+                await loadSimpleFIN()
             }
             .alert("Join code", isPresented: $showCode) {
                 Button("Copy") { if let code { Pasteboard.copy(code) } }
                 Button("OK", role: .cancel) {}
             } message: {
                 Text("\(code ?? "")\nShare it once. It expires in a day.")
+            }
+            .confirmationDialog("Disconnect SimpleFIN?", isPresented: $showDisconnectConfirmation, titleVisibility: .visible) {
+                Button("Disconnect", role: .destructive) {
+                    Task { await disconnectSimpleFIN() }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("The saved server credential will be deleted. Previously imported transactions will remain in your budget.")
             }
         }
     }
@@ -126,6 +192,58 @@ struct SettingsView: View {
             Spacer()
             Text(on ? "Configured" : "Not configured")
                 .foregroundStyle(on ? Theme.good : Theme.muted)
+        }
+    }
+
+    private func loadSimpleFIN() async {
+        simplefin = try? await app.api.get("/v1/simplefin/status")
+    }
+
+    private func connectSimpleFIN() async {
+        let token = setupToken.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !token.isEmpty else { return }
+        setupToken = ""
+        simplefinBusy = true
+        simplefinNotice = nil
+        defer { simplefinBusy = false }
+        do {
+            let result: SimpleFINConnectResult = try await app.api.post(
+                "/v1/simplefin/connect",
+                body: SimpleFINConnectBody(setupToken: token)
+            )
+            simplefinNotice = result.message
+            await loadSimpleFIN()
+            await syncSimpleFIN()
+        } catch {
+            simplefinNotice = error.localizedDescription
+        }
+    }
+
+    private func syncSimpleFIN() async {
+        simplefinBusy = true
+        simplefinNotice = nil
+        defer { simplefinBusy = false }
+        do {
+            let result: SimpleFINSyncResult = try await app.api.post("/v1/simplefin/sync")
+            simplefinNotice = "Imported \(result.imported) new transactions; skipped \(result.skipped) duplicates."
+            await loadSimpleFIN()
+            await app.refreshAll(silent: true)
+        } catch {
+            simplefinNotice = error.localizedDescription
+            await loadSimpleFIN()
+        }
+    }
+
+    private func disconnectSimpleFIN() async {
+        simplefinBusy = true
+        simplefinNotice = nil
+        defer { simplefinBusy = false }
+        do {
+            let _: JSONAck = try await app.api.delete("/v1/simplefin/connection")
+            simplefinNotice = "SimpleFIN disconnected. Existing transactions are unchanged."
+            await loadSimpleFIN()
+        } catch {
+            simplefinNotice = error.localizedDescription
         }
     }
 }

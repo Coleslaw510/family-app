@@ -424,7 +424,7 @@ struct AccountEditor: View {
                 Text("Credit").tag("credit")
                 Text("Other").tag("other")
             }
-            Text("Credit cards can be negative. Bank sync arrives in 1.1.")
+            Text("Credit cards can be negative. Connect SimpleFIN in Settings to sync transactions.")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(Theme.muted)
             if existing != nil {

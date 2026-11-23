@@ -258,7 +258,7 @@ struct HomeView: View {
                     Spacer()
                     HStack(spacing: 5) {
                         Circle().fill(Color(hex: 0x4285F4)).frame(width: 7, height: 7)
-                        Text("Google Calendar")
+                        Text("Events + feeds")
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundStyle(Theme.muted)
                     }
