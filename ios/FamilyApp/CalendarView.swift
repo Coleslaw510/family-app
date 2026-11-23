@@ -31,11 +31,7 @@ struct CalendarView: View {
                         .tracking(-0.6)
                     Spacer()
                     GearButton { sheet = .settings }
-                    Button { sheet = .feeds } label: {
-                        Image(systemName: "dot.radiowaves.left.and.right")
-                            .foregroundStyle(Theme.muted)
-                    }
-                    .buttonStyle(.plain)
+                    TintedIconButton(system: "dot.radiowaves.left.and.right", title: "Calendar feeds", tint: Theme.muted) { sheet = .feeds }
                 }
                 Card {
                     HStack(spacing: 8) {
@@ -48,12 +44,12 @@ struct CalendarView: View {
                 Card {
                     VStack(spacing: 10) {
                         HStack {
-                            Button { shift(-1) } label: { Image(systemName: "chevron.left") }
+                            TintedIconButton(system: "chevron.left", title: "Previous month") { shift(-1) }
                             Spacer()
                             Text(Dates.prettyMonth(Dates.monthKey(visible)))
                                 .font(.system(size: 16, weight: .bold))
                             Spacer()
-                            Button { shift(1) } label: { Image(systemName: "chevron.right") }
+                            TintedIconButton(system: "chevron.right", title: "Next month") { shift(1) }
                         }
                         .foregroundStyle(Theme.text)
                         weekdayHeader
@@ -71,10 +67,7 @@ struct CalendarView: View {
                             Text(Dates.longDay(selected))
                                 .font(.system(size: 15, weight: .bold))
                             Spacer()
-                            Button { sheet = .event(blankEvent()) } label: {
-                                Image(systemName: "plus").foregroundStyle(Theme.accent2)
-                            }
-                            .buttonStyle(.plain)
+                            TintedIconButton(system: "plus", title: "Add event") { sheet = .event(blankEvent()) }
                         }
                         let dayEvents = events(on: selected)
                         if dayEvents.isEmpty {

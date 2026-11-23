@@ -19,33 +19,34 @@ extension Color {
 }
 
 enum Theme {
-    static let bg = Color(hex: 0xF4F6FA)
-    static let panel2 = Color(hex: 0xF8FAFC)
-    static let line = Color(hex: 0xE3E8F0)
-    static let line2 = Color(hex: 0xEEF2F7)
-    static let text = Color(hex: 0x0F172A)
-    static let muted = Color(hex: 0x64748B)
-    static let soft = Color(hex: 0x94A3B8)
-    static let accent = Color(hex: 0x2563EB)
-    static let accent2 = Color(hex: 0x1D4ED8)
-    static let navy = Color(hex: 0x1E3A8A)
-    static let good = Color(hex: 0x15803D)
-    static let goodBg = Color(hex: 0xDCFCE7)
-    static let warn = Color(hex: 0xB45309)
-    static let warnBg = Color(hex: 0xFEF3C7)
-    static let bad = Color(hex: 0xB91C1C)
-    static let badBg = Color(hex: 0xFEE2E2)
-    static let marriage = Color(hex: 0xBE185D)
-    static let family = Color(hex: 0x0D9488)
-    static let calendar = Color(hex: 0x7C3AED)
-    static let vacation = Color(hex: 0xEA580C)
-    static let insightBg = Color(hex: 0xFFFBEB)
-    static let insightLine = Color(hex: 0xFDE68A)
-    static let insightText = Color(hex: 0x92400E)
-    static let noteBg = Color(hex: 0xFDF2F8)
-    static let noteLine = Color(hex: 0xFBCFE8)
-    static let noteText = Color(hex: 0x9D174D)
-    static let safeBg = Color(hex: 0xEAF1FE)
+    static let bg = Color(uiColor: .systemGroupedBackground)
+    static let surface = Color(uiColor: .secondarySystemGroupedBackground)
+    static let panel2 = Color(uiColor: .tertiarySystemGroupedBackground)
+    static let line = Color(uiColor: .separator).opacity(0.45)
+    static let line2 = Color(uiColor: .separator).opacity(0.22)
+    static let text = Color.primary
+    static let muted = Color.secondary
+    static let soft = Color(uiColor: .tertiaryLabel)
+    static let accent = Color(uiColor: .systemBlue)
+    static let accent2 = Color(uiColor: .systemBlue)
+    static let navy = Color(uiColor: .systemIndigo)
+    static let good = Color(uiColor: .systemGreen)
+    static let goodBg = good.opacity(0.14)
+    static let warn = Color(uiColor: .systemOrange)
+    static let warnBg = warn.opacity(0.15)
+    static let bad = Color(uiColor: .systemRed)
+    static let badBg = bad.opacity(0.14)
+    static let marriage = Color(uiColor: .systemPink)
+    static let family = Color(uiColor: .systemTeal)
+    static let calendar = Color(uiColor: .systemPurple)
+    static let vacation = Color(uiColor: .systemOrange)
+    static let insightBg = warn.opacity(0.12)
+    static let insightLine = warn.opacity(0.3)
+    static let insightText = Color(uiColor: .secondaryLabel)
+    static let noteBg = marriage.opacity(0.1)
+    static let noteLine = marriage.opacity(0.25)
+    static let noteText = marriage
+    static let safeBg = accent.opacity(0.12)
 
     static let budgetGradient = [Color(hex: 0x60A5FA), Color(hex: 0x1E3A8A)]
     static let marriageGradient = [Color(hex: 0xF472B6), Color(hex: 0xBE185D)]
@@ -58,7 +59,7 @@ enum Theme {
     static let aiGradient = [Color(hex: 0xF59E0B), Color(hex: 0xD97706)]
 }
 
-enum AppTab: String, CaseIterable, Identifiable {
+enum AppTab: String, CaseIterable, Identifiable, Hashable {
     case home, budget, marriage, family, food, calendar, vacations
 
     var id: String { rawValue }
@@ -118,16 +119,7 @@ struct Card<Content: View>: View {
         content
             .padding(padding)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(Color.white)
-                    .shadow(color: Color(hex: 0x0F172A).opacity(0.05), radius: 1, y: 1)
-                    .shadow(color: Color(hex: 0x0F172A).opacity(0.06), radius: 8, y: 4)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .stroke(Theme.line, lineWidth: 1)
-            )
+            .familyGlassPanel(cornerRadius: 20)
     }
 }
 
@@ -139,14 +131,13 @@ struct IconTile: View {
     var body: some View {
         Image(systemName: system)
             .font(.system(size: size * 0.46, weight: .semibold))
-            .foregroundStyle(.white)
+            .foregroundStyle(tint)
             .frame(width: size, height: size)
-            .background(
-                LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: size * 0.32, style: .continuous))
-            .shadow(color: (colors.last ?? .clear).opacity(0.28), radius: 4, y: 3)
+            .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: size * 0.32, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: size * 0.32, style: .continuous).stroke(tint.opacity(0.12), lineWidth: 0.75))
     }
+
+    private var tint: Color { colors.last ?? Theme.accent }
 }
 
 struct PacePill: View {
@@ -332,21 +323,27 @@ struct PrimaryButton: View {
     var system: String? = nil
     var action: () -> Void
 
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                if let system {
-                    Image(systemName: system)
-                }
-                Text(title)
-            }
-            .font(.system(size: 15, weight: .bold))
-            .foregroundStyle(.white)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .background(Theme.accent, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    private var label: some View {
+        HStack(spacing: 7) {
+            if let system { Image(systemName: system) }
+            Text(title)
         }
-        .buttonStyle(.plain)
+        .font(.headline)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 5)
+    }
+
+    @ViewBuilder var body: some View {
+        if #available(iOS 26.0, *) {
+            Button(action: action) { label }
+                .buttonStyle(.glassProminent)
+                .tint(Theme.accent)
+        } else {
+            Button(action: action) { label }
+                .buttonStyle(.borderedProminent)
+                .buttonBorderShape(.capsule)
+                .tint(Theme.accent)
+        }
     }
 }
 
@@ -355,25 +352,85 @@ struct OutlineButton: View {
     var system: String? = nil
     var action: () -> Void
 
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                if let system {
-                    Image(systemName: system)
+    @ViewBuilder var body: some View {
+        if #available(iOS 26.0, *) {
+            Button(action: action) {
+                HStack(spacing: 7) {
+                    if let system { Image(systemName: system) }
+                    Text(title)
                 }
-                Text(title)
+                .font(.headline)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 5)
             }
-            .font(.system(size: 15, weight: .semibold))
-            .foregroundStyle(Theme.text)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .background(Color.white, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Theme.line, lineWidth: 1)
-            )
+            .buttonStyle(.glass)
+        } else {
+            Button(action: action) {
+                HStack(spacing: 7) {
+                    if let system { Image(systemName: system) }
+                    Text(title)
+                }
+                .font(.headline)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 5)
+            }
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.capsule)
+            .tint(Theme.accent)
         }
-        .buttonStyle(.plain)
+    }
+}
+
+struct TintedIconButton: View {
+    var system: String
+    var title: String
+    var tint: Color = Theme.accent
+    var action: () -> Void
+
+    @ViewBuilder var body: some View {
+        if #available(iOS 26.0, *) {
+            Button(action: action) {
+                Image(systemName: system)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: 36, height: 36)
+            }
+            .buttonStyle(.glass)
+            .accessibilityLabel(title)
+        } else {
+            Button(action: action) {
+                Image(systemName: system)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: 36, height: 36)
+                    .background(tint.opacity(0.12), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(title)
+        }
+    }
+}
+
+private struct FamilyGlassPanel: ViewModifier {
+    var cornerRadius: CGFloat
+
+    @ViewBuilder func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        if #available(iOS 26.0, *) {
+            content
+                .glassEffect(.regular, in: shape)
+                .overlay(shape.stroke(Theme.line, lineWidth: 0.8))
+        } else {
+            content
+                .background(.regularMaterial, in: shape)
+                .overlay(shape.stroke(Theme.line, lineWidth: 0.8))
+        }
+    }
+}
+
+extension View {
+    func familyGlassPanel(cornerRadius: CGFloat) -> some View {
+        modifier(FamilyGlassPanel(cornerRadius: cornerRadius))
     }
 }
 
@@ -392,7 +449,7 @@ struct LabeledInput: View {
                 .autocorrectionDisabled(keyboard == .URL || keyboard == .decimalPad)
                 .font(.system(size: 16, weight: .medium))
                 .padding(12)
-                .background(Theme.panel2, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .stroke(Theme.line, lineWidth: 1)
@@ -420,7 +477,7 @@ struct BannerToast: View {
             .buttonStyle(.plain)
         }
         .padding(12)
-        .background(Color.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(Theme.line, lineWidth: 1)
@@ -430,56 +487,10 @@ struct BannerToast: View {
     }
 }
 
-struct FamilyTabBar: View {
-    @Binding var tab: AppTab
-
-    var body: some View {
-        VStack(spacing: 0) {
-            Rectangle().fill(Theme.line).frame(height: 1)
-            HStack(spacing: 0) {
-                ForEach(AppTab.allCases) { item in
-                    Button {
-                        if tab != item { Haptics.tap() }
-                        tab = item
-                    } label: {
-                        VStack(spacing: 3) {
-                            Image(systemName: tab == item ? item.filled : item.symbol)
-                                .font(.system(size: 18, weight: tab == item ? .semibold : .regular))
-                            Text(item.title)
-                                .font(.system(size: 9, weight: .semibold))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.7)
-                        }
-                        .foregroundStyle(tab == item ? Theme.accent2 : Theme.soft)
-                        .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(item.title)
-                }
-            }
-            .padding(.top, 8)
-            .padding(.bottom, 6)
-        }
-        .background(Color.white.opacity(0.94).ignoresSafeArea(edges: .bottom))
-    }
-}
-
 struct GearButton: View {
     var action: () -> Void
     var body: some View {
-        Button(action: action) {
-            Image(systemName: "gearshape")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(Theme.muted)
-                .frame(width: 32, height: 32)
-                .background(Color.white, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(Theme.line, lineWidth: 1)
-                )
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Settings")
+        TintedIconButton(system: "gearshape", title: "Settings", tint: Theme.muted, action: action)
     }
 }
 

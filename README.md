@@ -1,6 +1,6 @@
 # Family App
 
-A private iOS app for Cole and his wife, plus the small server that holds the family data. Light theme, six tabs: Home, Budget, Marriage, Family, Calendar, and Vacations.
+A private iOS app for Cole and his wife, plus the small server that holds the family data. The interface follows system appearance and has seven tabs: Home, Budget, Marriage, Family, Food, Calendar, and Vacations. The native tab bar places overflow destinations in Apple's More screen.
 
 The phone app is SwiftUI. SpriteKit plays confetti when a weekly check-in is saved or a trip fund hits its goal, and a quiet sparkle sits behind the vacation countdown. The server is FastAPI and SQLite. Only people in the family can read or write that family's data.
 
@@ -173,6 +173,10 @@ Send `Authorization: Bearer <token>` except on health, create, and join. A wrong
 Join codes are stored as SHA-256 hashes. Failed join attempts are rate-limited per IP. Creating families is rate-limited too, since this server sits on a public hostname.
 
 Pace is `on_pace`, `watch`, `over`, or `no_budget`. Safe-to-spend is what's left after upcoming unpaid bills this month, divided by the days left. Insights are rules (over budget, a bill due soon, a category running under its older average). They are not a model.
+
+## Version 1.2
+
+Presentation-only refresh of the iOS app: native system tab navigation, adaptive grouped glass/material cards, capsule and tinted icon buttons, a native grouped Settings form, and tappable Home section headers. Liquid Glass effects are used on iOS 26 and newer; earlier supported iOS versions retain system-material and native button fallbacks. No server, data, or domain feature changes.
 
 ## Version 1.1
 

@@ -81,7 +81,7 @@ struct CelebrationOverlay: View {
                 .foregroundStyle(Theme.text)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 10)
-                .background(Color.white, in: Capsule())
+                .background(Theme.surface, in: Capsule())
                 .overlay(Capsule().stroke(Theme.line, lineWidth: 1))
                 .shadow(color: Color(hex: 0x0F172A).opacity(0.08), radius: 8, y: 4)
                 .padding(.top, 72)

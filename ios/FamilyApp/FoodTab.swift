@@ -32,11 +32,11 @@ struct FoodTabView: View {
                 }
                 .pickerStyle(.segmented)
                 HStack {
-                    Button { shift(-1) } label: { Image(systemName: "chevron.left") }
+                    TintedIconButton(system: "chevron.left", title: "Previous day") { shift(-1) }
                     Spacer()
                     Text(Dates.longDay(day)).font(.system(size: 15, weight: .bold))
                     Spacer()
-                    Button { shift(1) } label: { Image(systemName: "chevron.right") }
+                    TintedIconButton(system: "chevron.right", title: "Next day") { shift(1) }
                 }
                 .foregroundStyle(Theme.text)
                 if let bundle {

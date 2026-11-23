@@ -186,8 +186,7 @@ struct TripDetailView: View {
                 HStack {
                     Text("Packing").font(.system(size: 15, weight: .bold))
                     Spacer()
-                    Button { addingPack = true } label: { Image(systemName: "plus").foregroundStyle(Theme.accent2) }
-                        .buttonStyle(.plain)
+                    TintedIconButton(system: "plus", title: "Add packing item") { addingPack = true }
                 }
                 if trip.packing.isEmpty { Text("Nothing to pack yet.").foregroundStyle(Theme.muted) }
                 ForEach(trip.packing) { item in
@@ -214,8 +213,7 @@ struct TripDetailView: View {
                 HStack {
                     Text("Itinerary").font(.system(size: 15, weight: .bold))
                     Spacer()
-                    Button { addingStop = true } label: { Image(systemName: "plus").foregroundStyle(Theme.accent2) }
-                        .buttonStyle(.plain)
+                    TintedIconButton(system: "plus", title: "Add itinerary item") { addingStop = true }
                 }
                 if trip.itinerary.isEmpty { Text("Add the shape of the days.").foregroundStyle(Theme.muted) }
                 ForEach(trip.itinerary) { item in

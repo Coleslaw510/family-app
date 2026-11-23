@@ -138,6 +138,7 @@ struct HomeView: View {
             }
         }
         .onTapGesture { app.tab = .budget }
+        .accessibilityAction(named: Text("Open Budget")) { app.tab = .budget }
     }
 
     private var marriageCard: some View {
@@ -146,12 +147,15 @@ struct HomeView: View {
         let days = anniversary.flatMap { Dates.nextAnnualDays(from: $0) }
         return Card(padding: 11) {
             VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
-                    IconTile(system: "heart", colors: Theme.marriageGradient)
-                    Text("Marriage")
-                        .font(.system(size: 15, weight: .bold))
-                        .lineLimit(1)
+                Button { app.tab = .marriage } label: {
+                    HStack(spacing: 6) {
+                        IconTile(system: "heart", colors: Theme.marriageGradient)
+                        Text("Marriage")
+                            .font(.system(size: 15, weight: .bold))
+                            .lineLimit(1)
+                    }
                 }
+                .buttonStyle(.plain)
                 Kicker(text: next == nil ? "Date night" : "Next date night")
                 Text(next?.title ?? "Plan a date")
                     .font(.system(size: 13.5, weight: .bold))
@@ -201,9 +205,14 @@ struct HomeView: View {
         return Card(padding: 11) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
-                    IconTile(system: "person.2", colors: Theme.familyGradient)
-                    Text("Family")
-                        .font(.system(size: 15, weight: .bold))
+                    Button { app.tab = .family } label: {
+                        HStack(spacing: 6) {
+                            IconTile(system: "person.2", colors: Theme.familyGradient)
+                            Text("Family")
+                                .font(.system(size: 15, weight: .bold))
+                        }
+                    }
+                    .buttonStyle(.plain)
                     Spacer()
                     Text("\(chores?.done ?? 0) of \(chores?.total ?? 0)")
                         .font(.system(size: 11, weight: .bold))
@@ -267,6 +276,7 @@ struct HomeView: View {
             }
         }
         .onTapGesture { app.tab = .calendar }
+        .accessibilityAction(named: Text("Open Calendar")) { app.tab = .calendar }
     }
 
     private func eventRow(_ event: FamilyEvent) -> some View {
@@ -350,6 +360,7 @@ struct HomeView: View {
             }
         }
         .onTapGesture { app.tab = .vacations }
+        .accessibilityAction(named: Text("Open Vacations")) { app.tab = .vacations }
     }
 
     private var mortgageHomeCard: some View {
@@ -380,6 +391,7 @@ struct HomeView: View {
             }
         }
         .onTapGesture { app.tab = .budget }
+        .accessibilityAction(named: Text("Open Budget")) { app.tab = .budget }
     }
 
     private var foodHomeCard: some View {
@@ -407,6 +419,7 @@ struct HomeView: View {
             }
         }
         .onTapGesture { app.tab = .food }
+        .accessibilityAction(named: Text("Open Food")) { app.tab = .food }
     }
 }
 
@@ -420,7 +433,7 @@ struct CheckBox: View {
                 .stroke(done ? color : Color(hex: 0xCBD5E1), lineWidth: 1.5)
                 .background(
                     RoundedRectangle(cornerRadius: 5, style: .continuous)
-                        .fill(done ? color : Color.white)
+                        .fill(done ? color : Theme.surface)
                 )
             if done {
                 Image(systemName: "checkmark")

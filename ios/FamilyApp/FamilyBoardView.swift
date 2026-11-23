@@ -176,10 +176,7 @@ struct FamilyBoardView: View {
             IconTile(system: icon, colors: colors)
             Text(title).font(.system(size: 15, weight: .bold))
             Spacer()
-            Button(action: add) {
-                Image(systemName: "plus").font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.accent2)
-            }
-            .buttonStyle(.plain)
+            TintedIconButton(system: "plus", title: "Add \(title)", action: add)
         }
     }
 

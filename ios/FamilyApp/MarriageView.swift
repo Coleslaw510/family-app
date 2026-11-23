@@ -127,10 +127,7 @@ struct MarriageView: View {
                     Text("Birthdays")
                         .font(.system(size: 15, weight: .bold))
                     Spacer()
-                    Button { sheet = .birthday } label: {
-                        Image(systemName: "plus").font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.accent2)
-                    }
-                    .buttonStyle(.plain)
+                    TintedIconButton(system: "plus", title: "Add birthday") { sheet = .birthday }
                 }
                 let birthdays = (app.marriage?.birthdays ?? []).sorted {
                     (Dates.daysUntilMonthDay(month: $0.month, day: $0.day) ?? 999) <
@@ -210,10 +207,7 @@ struct MarriageView: View {
                     Text("Date nights")
                         .font(.system(size: 15, weight: .bold))
                     Spacer()
-                    Button { sheet = .night(blankDate()) } label: {
-                        Image(systemName: "plus").foregroundStyle(Theme.accent2)
-                    }
-                    .buttonStyle(.plain)
+                    TintedIconButton(system: "plus", title: "Add date night") { sheet = .night(blankDate()) }
                 }
                 if let last = past.first {
                     Kicker(text: "Last date")
@@ -297,10 +291,7 @@ struct MarriageView: View {
                     Text("Love notes")
                         .font(.system(size: 15, weight: .bold))
                     Spacer()
-                    Button { sheet = .love } label: {
-                        Image(systemName: "plus").foregroundStyle(Theme.accent2)
-                    }
-                    .buttonStyle(.plain)
+                    TintedIconButton(system: "plus", title: "Add love note") { sheet = .love }
                 }
                 if (app.marriage?.loveNotes ?? []).isEmpty {
                     Text("Leave something kind for them to find.")

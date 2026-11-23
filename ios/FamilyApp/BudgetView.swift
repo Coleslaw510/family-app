@@ -64,7 +64,7 @@ struct BudgetView: View {
                         .foregroundStyle(Theme.accent2)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(14)
-                        .background(Color.white, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).stroke(Theme.line, lineWidth: 1))
                 }
                 .buttonStyle(.plain)
@@ -120,23 +120,14 @@ struct BudgetView: View {
                 GearButton { sheet = .settings }
             }
             HStack {
-                Button { Task { await app.shiftMonth(-1) } } label: { chevron("chevron.left") }
+                TintedIconButton(system: "chevron.left", title: "Previous month") { Task { await app.shiftMonth(-1) } }
                 Text(Dates.prettyMonth(app.budgetMonth))
                     .font(.system(size: 15, weight: .bold))
                     .frame(maxWidth: .infinity)
-                Button { Task { await app.shiftMonth(1) } } label: { chevron("chevron.right") }
+                TintedIconButton(system: "chevron.right", title: "Next month") { Task { await app.shiftMonth(1) } }
             }
             SyncPill(text: Dates.synced(app.lastSynced))
         }
-    }
-
-    private func chevron(_ name: String) -> some View {
-        Image(systemName: name)
-            .font(.system(size: 13, weight: .bold))
-            .foregroundStyle(Theme.muted)
-            .frame(width: 28, height: 28)
-            .background(Color.white, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Theme.line, lineWidth: 1))
     }
 
     private func hero(_ snapshot: BudgetSnapshot) -> some View {
@@ -371,12 +362,7 @@ struct BudgetView: View {
                     Text("Expected income")
                         .font(.system(size: 15, weight: .bold))
                     Spacer()
-                    Button { sheet = .addIncome } label: {
-                        Image(systemName: "plus")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundStyle(Theme.accent2)
-                    }
-                    .buttonStyle(.plain)
+                    TintedIconButton(system: "plus", title: "Add income") { sheet = .addIncome }
                 }
                 HStack(alignment: .firstTextBaseline) {
                     VStack(alignment: .leading, spacing: 2) {
@@ -557,7 +543,7 @@ struct BudgetView: View {
                             .font(.system(size: 12.5, weight: .semibold))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
-                            .background(Color.white, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            .background(Theme.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(Theme.line, lineWidth: 1))
                     }
                     .buttonStyle(.plain)
@@ -591,10 +577,7 @@ struct BudgetView: View {
                             .padding(.vertical, 2)
                             .background(Theme.warnBg, in: Capsule())
                     }
-                    Button { sheet = .addBill } label: {
-                        Image(systemName: "plus").font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.accent2)
-                    }
-                    .buttonStyle(.plain)
+                    TintedIconButton(system: "plus", title: "Add bill") { sheet = .addBill }
                 }
                 if snapshot.bills.isEmpty {
                     Text("No upcoming bills.")
@@ -682,10 +665,7 @@ struct BudgetView: View {
                     Text("Accounts")
                         .font(.system(size: 15, weight: .bold))
                     Spacer()
-                    Button { sheet = .addAccount } label: {
-                        Image(systemName: "plus").font(.system(size: 14, weight: .bold)).foregroundStyle(Theme.accent2)
-                    }
-                    .buttonStyle(.plain)
+                    TintedIconButton(system: "plus", title: "Add account") { sheet = .addAccount }
                 }
                 Text("SimpleFIN is not in this version. " + snapshot.placeholders.bankSync)
                     .font(.system(size: 12, weight: .semibold))

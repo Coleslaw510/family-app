@@ -26,7 +26,6 @@ struct RootView: View {
                     }
             }
         }
-        .preferredColorScheme(.light)
         .tint(Theme.accent)
         .task { await app.bootstrap() }
     }
@@ -36,28 +35,30 @@ struct MainShell: View {
     @EnvironmentObject private var app: AppModel
 
     var body: some View {
-        VStack(spacing: 0) {
-            ZStack {
-                switch app.tab {
-                case .home:
-                    HomeView()
-                case .budget:
-                    BudgetView()
-                case .marriage:
-                    MarriageView()
-                case .family:
-                    FamilyBoardView()
-                case .food:
-                    FoodTabView()
-                case .calendar:
-                    CalendarView()
-                case .vacations:
-                    VacationsView()
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            FamilyTabBar(tab: $app.tab)
+        TabView(selection: $app.tab) {
+            HomeView()
+                .tabItem { Label(AppTab.home.title, systemImage: AppTab.home.symbol) }
+                .tag(AppTab.home)
+            BudgetView()
+                .tabItem { Label(AppTab.budget.title, systemImage: AppTab.budget.symbol) }
+                .tag(AppTab.budget)
+            MarriageView()
+                .tabItem { Label(AppTab.marriage.title, systemImage: AppTab.marriage.symbol) }
+                .tag(AppTab.marriage)
+            FamilyBoardView()
+                .tabItem { Label(AppTab.family.title, systemImage: AppTab.family.symbol) }
+                .tag(AppTab.family)
+            FoodTabView()
+                .tabItem { Label(AppTab.food.title, systemImage: AppTab.food.symbol) }
+                .tag(AppTab.food)
+            CalendarView()
+                .tabItem { Label(AppTab.calendar.title, systemImage: AppTab.calendar.symbol) }
+                .tag(AppTab.calendar)
+            VacationsView()
+                .tabItem { Label(AppTab.vacations.title, systemImage: AppTab.vacations.symbol) }
+                .tag(AppTab.vacations)
         }
+        .tint(Theme.accent)
         .background(Theme.bg)
         .overlay(alignment: .top) {
             if let banner = app.banner, app.phase == .ready {
