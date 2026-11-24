@@ -39,9 +39,6 @@ struct MainShell: View {
             HomeView()
                 .tabItem { Label(AppTab.home.title, systemImage: AppTab.home.symbol) }
                 .tag(AppTab.home)
-            BudgetView()
-                .tabItem { Label(AppTab.budget.title, systemImage: AppTab.budget.symbol) }
-                .tag(AppTab.budget)
             MarriageView()
                 .tabItem { Label(AppTab.marriage.title, systemImage: AppTab.marriage.symbol) }
                 .tag(AppTab.marriage)

@@ -18,6 +18,7 @@ struct TxnBody: Encodable {
     var merchant: String
     var amountCents: Int
     var kind: String
+    var direction: String? = nil
     var occurredOn: String
     var categoryId: String?
     var note: String?

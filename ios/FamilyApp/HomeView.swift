@@ -10,6 +10,7 @@ struct HomeView: View {
                 header
                 budgetSummary
                 todaySummary
+                quickAccess
             }
             .padding(.horizontal, 16)
             .padding(.top, 8)
@@ -59,10 +60,7 @@ struct HomeView: View {
             ? "\(Money.format(remaining)) remaining"
             : "Over by \(Money.format(abs(remaining)))"
 
-        return Button {
-            app.tab = .budget
-        } label: {
-            Card(padding: 16) {
+        return Card(padding: 16) {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 8) {
                         Image(systemName: "creditcard")
@@ -71,9 +69,9 @@ struct HomeView: View {
                             .font(.headline)
                             .foregroundStyle(Theme.text)
                         Spacer()
-                        Image(systemName: "chevron.right")
+                        Text("Budget app")
                             .font(.caption.weight(.semibold))
-                            .foregroundStyle(Theme.soft)
+                            .foregroundStyle(Theme.muted)
                     }
 
                     if total > 0 {
@@ -98,16 +96,48 @@ struct HomeView: View {
                         Text("No monthly budget yet")
                             .font(.subheadline.weight(.medium))
                             .foregroundStyle(Theme.muted)
-                        Text("Tap to set one up")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(Theme.accent)
+                        Text("Set up budgets and categories in the Budget app")
+                            .font(.subheadline)
+                            .foregroundStyle(Theme.muted)
                     }
                 }
             }
+    }
+
+    private var quickAccess: some View {
+        Card(padding: 0) {
+            VStack(spacing: 0) {
+                HStack {
+                    Text("Quick access")
+                        .font(.headline)
+                        .foregroundStyle(Theme.text)
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 15)
+                .padding(.bottom, 2)
+                HomeLinkRow(
+                    symbol: "heart",
+                    tint: Theme.marriage,
+                    title: "Marriage",
+                    detail: app.dashboard?.nextDate?.title ?? "Check in and plan time together"
+                ) { app.tab = .marriage }
+                Divider().padding(.leading, 58)
+                HomeLinkRow(
+                    symbol: "fork.knife",
+                    tint: Theme.good,
+                    title: "Food",
+                    detail: app.food.map { "\($0.entries.count) items logged today" } ?? "Meals and nutrition"
+                ) { app.tab = .food }
+                Divider().padding(.leading, 58)
+                HomeLinkRow(
+                    symbol: "paperplane",
+                    tint: Theme.vacation,
+                    title: "Vacations",
+                    detail: app.trips.first.map { $0.destination ?? $0.name } ?? "Trips, plans, and packing"
+                ) { app.tab = .vacations }
+            }
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Monthly budget summary")
-        .accessibilityHint("Opens the Budget tab")
     }
 
     private var todaySummary: some View {

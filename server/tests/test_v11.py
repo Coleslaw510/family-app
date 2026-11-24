@@ -106,6 +106,49 @@ def test_csv_and_excel_import_dedupes_and_categorizes(client, monkeypatch):
     assert kinds["Paycheck"] == "income"
 
 
+def test_transaction_rules_reclassify_existing_and_respect_flow_and_family(client):
+    _created, headers = client_family(client)
+    categories = client.get("/v1/categories", headers=headers).json()["categories"]
+    groceries = next(item for item in categories if item["name"] == "Groceries")
+    existing = client.post(
+        "/v1/transactions",
+        headers=headers,
+        json={"merchant": "Payment to Visa", "amount_cents": 30000, "occurred_on": "2026-11-20", "kind": "expense", "category_id": groceries["id"]},
+    ).json()
+    transfer_rule = client.post(
+        "/v1/transaction-rules",
+        headers=headers,
+        json={"pattern": "payment to visa", "kind": "transfer", "flow_direction": "outflow", "apply_to_existing": True},
+    )
+    assert transfer_rule.status_code == 200, transfer_rule.text
+    assert transfer_rule.json()["updated_transactions"] == 1
+    edited = client.get("/v1/transactions", headers=headers).json()["transactions"]
+    payment = next(item for item in edited if item["id"] == existing["id"])
+    assert payment["kind"] == "transfer" and payment["category_id"] is None
+
+    income_rule = client.post(
+        "/v1/transaction-rules",
+        headers=headers,
+        json={"pattern": "venmo", "kind": "income", "flow_direction": "inflow"},
+    )
+    assert income_rule.status_code == 200, income_rule.text
+    imported = client.post(
+        "/v1/transactions/import",
+        headers=headers,
+        json={"rows": [
+            {"date": "2026-11-21", "merchant": "Venmo payment from friend", "amount_cents": 7500, "kind": "income"},
+            {"date": "2026-11-21", "merchant": "Venmo outgoing purchase", "amount_cents": 2200, "kind": "expense", "category": "Groceries"},
+        ]},
+    )
+    assert imported.status_code == 200, imported.text
+    new_txns = client.get("/v1/transactions", headers=headers).json()["transactions"]
+    deposit = next(item for item in new_txns if item["merchant"] == "Venmo payment from friend")
+    assert (deposit["kind"], deposit["direction"]) == ("income", "inflow")
+
+    _other, other_headers = client_family(client)
+    assert client.get("/v1/transaction-rules", headers=other_headers).json()["rules"] == []
+
+
 def test_feed_url_is_masked_and_ics_parses(client, monkeypatch):
     monkeypatch.setattr("app.v11._refresh_feed_id", lambda _feed_id: None)
     _created, headers = client_family(client)

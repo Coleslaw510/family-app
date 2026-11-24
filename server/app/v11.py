@@ -22,7 +22,8 @@ from openpyxl import load_workbook
 from pydantic import BaseModel, Field
 
 from .db import db, many, new_id, now_iso, one, plus_hours
-from .main import clean_color, clean_text, own_category, own_member, require_user
+from .classifier import apply_rule_to_existing, classify_transaction
+from .main import clean_color, clean_kind, clean_text, own_category, own_member, require_user
 
 log = logging.getLogger("family.v11")
 
@@ -106,6 +107,74 @@ def register_v11(app) -> None:
                 "DELETE FROM category_rules WHERE id = ? AND family_id = ?",
                 (rule_id, auth["family_id"]),
             ).rowcount
+        if not removed:
+            raise HTTPException(404, "Not found")
+        return {"ok": True}
+
+    @app.get("/v1/transaction-rules")
+    def list_transaction_rules(auth=Depends(require_user)):
+        with db() as conn:
+            rows = many(
+                conn,
+                """
+                SELECT r.*, c.name AS category_name
+                FROM transaction_rules r
+                LEFT JOIN categories c ON c.id = r.category_id AND c.family_id = r.family_id
+                WHERE r.family_id = ?
+                ORDER BY length(r.pattern) DESC, r.pattern
+                """,
+                (auth["family_id"],),
+            )
+        return {"rules": [_transaction_rule(row) for row in rows]}
+
+    @app.post("/v1/transaction-rules")
+    def create_transaction_rule(body: TransactionRuleIn, auth=Depends(require_user)):
+        pattern = _rule_pattern(body.pattern)
+        rule_id = new_id()
+        with db() as conn:
+            kind, flow_direction, category_id = _validate_transaction_rule(conn, body, auth["family_id"])
+            conn.execute(
+                "INSERT INTO transaction_rules (id, family_id, pattern, kind, flow_direction, category_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (rule_id, auth["family_id"], pattern, kind, flow_direction, category_id, now_iso()),
+            )
+            updated = apply_rule_to_existing(conn, auth["family_id"], rule_id) if body.apply_to_existing else 0
+        return {"ok": True, "id": rule_id, "updated_transactions": updated}
+
+    @app.patch("/v1/transaction-rules/{rule_id}")
+    def patch_transaction_rule(rule_id: str, body: TransactionRulePatch, auth=Depends(require_user)):
+        with db() as conn:
+            row = one(conn, "SELECT * FROM transaction_rules WHERE id = ? AND family_id = ?", (rule_id, auth["family_id"]))
+            if row is None:
+                raise HTTPException(404, "Not found")
+            merged = TransactionRuleIn(
+                pattern=body.pattern if body.pattern is not None else row["pattern"],
+                kind=body.kind if body.kind is not None else row["kind"],
+                flow_direction=body.flow_direction if body.flow_direction is not None else row["flow_direction"],
+                category_id=body.category_id if "category_id" in body.model_fields_set else row["category_id"],
+                apply_to_existing=body.apply_to_existing,
+            )
+            pattern = _rule_pattern(merged.pattern)
+            kind, flow_direction, category_id = _validate_transaction_rule(conn, merged, auth["family_id"])
+            conn.execute(
+                "UPDATE transaction_rules SET pattern = ?, kind = ?, flow_direction = ?, category_id = ? WHERE id = ? AND family_id = ?",
+                (pattern, kind, flow_direction, category_id, rule_id, auth["family_id"]),
+            )
+            updated = apply_rule_to_existing(conn, auth["family_id"], rule_id) if body.apply_to_existing else 0
+            result = one(
+                conn,
+                "SELECT r.*, c.name AS category_name FROM transaction_rules r LEFT JOIN categories c ON c.id = r.category_id AND c.family_id = r.family_id WHERE r.id = ? AND r.family_id = ?",
+                (rule_id, auth["family_id"]),
+            )
+        return {**_transaction_rule(result), "updated_transactions": updated}
+
+    @app.delete("/v1/transaction-rules/{rule_id}")
+    def delete_transaction_rule(rule_id: str, auth=Depends(require_user)):
+        with db() as conn:
+            removed = conn.execute(
+                "DELETE FROM transaction_rules WHERE id = ? AND family_id = ?",
+                (rule_id, auth["family_id"]),
+            ).rowcount
+            conn.execute("DELETE FROM category_rules WHERE id = ? AND family_id = ?", (rule_id, auth["family_id"]))
         if not removed:
             raise HTTPException(404, "Not found")
         return {"ok": True}
@@ -663,6 +732,22 @@ class RuleIn(BaseModel):
     category_id: str
 
 
+class TransactionRuleIn(BaseModel):
+    pattern: str
+    kind: str
+    flow_direction: str = "any"
+    category_id: str | None = None
+    apply_to_existing: bool = False
+
+
+class TransactionRulePatch(BaseModel):
+    pattern: str | None = None
+    kind: str | None = None
+    flow_direction: str | None = None
+    category_id: str | None = None
+    apply_to_existing: bool = False
+
+
 class ImportCommit(BaseModel):
     date_column: int
     description_column: int
@@ -794,6 +879,39 @@ def _rule(row) -> dict:
     }
 
 
+def _transaction_rule(row) -> dict:
+    return {
+        "id": row["id"],
+        "pattern": row["pattern"],
+        "kind": row["kind"],
+        "flow_direction": row["flow_direction"],
+        "category_id": row["category_id"],
+        "category_name": row["category_name"],
+    }
+
+
+def _rule_pattern(value: str) -> str:
+    pattern = " ".join(value.strip().split()).lower()
+    if len(pattern) < 2 or len(pattern) > 80:
+        raise HTTPException(400, "Rule text must be between 2 and 80 characters.")
+    return pattern
+
+
+def _validate_transaction_rule(conn, body: TransactionRuleIn, family_id: str) -> tuple[str, str, str | None]:
+    kind = clean_kind(body.kind)
+    direction = body.flow_direction.strip().lower()
+    if direction not in {"any", "inflow", "outflow"}:
+        raise HTTPException(400, "Rule flow must be any, inflow, or outflow.")
+    category_id = body.category_id or None
+    if kind == "expense":
+        if not category_id:
+            raise HTTPException(400, "Expense rules need a category.")
+        own_category(conn, family_id, category_id)
+    else:
+        category_id = None
+    return kind, direction, category_id
+
+
 def _parse_table(filename: str, raw: bytes) -> tuple[list[str], list[list[str]]]:
     lower = filename.lower()
     if lower.endswith(".xlsx") or raw[:2] == b"PK":
@@ -883,30 +1001,35 @@ def _apply_rows(conn, auth, headers, table, body: ImportCommit) -> tuple[int, in
         parsed = _row_to_txn(row, body)
         if parsed is None:
             continue
-        day_on, merchant, amount, kind = parsed
+        day_on, merchant, amount, initial_kind = parsed
+        direction = "inflow" if initial_kind == "income" else "outflow"
+        kind, category_id, matched_rule = classify_transaction(
+            conn, auth["family_id"], merchant, initial_kind, direction
+        )
         existing = one(
             conn,
             """
             SELECT id FROM transactions
             WHERE family_id = ? AND occurred_on = ? AND lower(merchant) = lower(?)
-              AND amount_cents = ? AND kind = ?
+              AND amount_cents = ? AND kind = ? AND direction = ?
             """,
-            (auth["family_id"], day_on, merchant, amount, kind),
+            (auth["family_id"], day_on, merchant, amount, kind, direction),
         )
         if existing:
             skipped += 1
             continue
-        category_id = _categorize(merchant, rules, by_name) if kind == "expense" else None
+        if kind == "expense" and category_id is None and matched_rule is None:
+            category_id = _categorize(merchant, rules, by_name)
         if category_id:
             categorized += 1
         conn.execute(
             """
             INSERT INTO transactions (
-                id, family_id, category_id, member_id, merchant, amount_cents, kind,
+                id, family_id, category_id, member_id, merchant, amount_cents, kind, direction,
                 occurred_on, note, source, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 'import', ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'import', ?)
             """,
-            (new_id(), auth["family_id"], category_id, auth["member_id"], merchant, amount, kind, day_on, now_iso()),
+            (new_id(), auth["family_id"], category_id, auth["member_id"], merchant, amount, kind, direction, day_on, now_iso()),
         )
         imported += 1
     return imported, skipped, categorized

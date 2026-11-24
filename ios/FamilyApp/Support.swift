@@ -213,11 +213,11 @@ enum Dates {
 }
 
 enum KeychainStore {
-    private static let service = "com.colemcclintock.familyapp"
+    static let familyService = "com.colemcclintock.familyapp"
     private static let account = "session"
 
-    static func save(_ token: String) {
-        let query = base()
+    static func save(_ token: String, service: String = familyService) {
+        let query = base(service: service)
         SecItemDelete(query as CFDictionary)
         var add = query
         add[kSecValueData as String] = Data(token.utf8)
@@ -225,8 +225,8 @@ enum KeychainStore {
         SecItemAdd(add as CFDictionary, nil)
     }
 
-    static func read() -> String? {
-        var query = base()
+    static func read(service: String = familyService) -> String? {
+        var query = base(service: service)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
         var item: CFTypeRef?
@@ -235,11 +235,11 @@ enum KeychainStore {
         return String(data: data, encoding: .utf8)
     }
 
-    static func clear() {
-        SecItemDelete(base() as CFDictionary)
+    static func clear(service: String = familyService) {
+        SecItemDelete(base(service: service) as CFDictionary)
     }
 
-    private static func base() -> [String: Any] {
+    private static func base(service: String) -> [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,

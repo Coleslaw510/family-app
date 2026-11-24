@@ -60,14 +60,13 @@ enum Theme {
 }
 
 enum AppTab: String, CaseIterable, Identifiable, Hashable {
-    case home, budget, marriage, family, food, calendar, vacations
+    case home, marriage, family, food, calendar, vacations
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .home: return "Home"
-        case .budget: return "Budget"
         case .marriage: return "Marriage"
         case .family: return "Family"
         case .food: return "Food"
@@ -79,7 +78,6 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
     var symbol: String {
         switch self {
         case .home: return "house"
-        case .budget: return "creditcard"
         case .marriage: return "heart"
         case .family: return "person.2"
         case .food: return "fork.knife"
@@ -91,7 +89,6 @@ enum AppTab: String, CaseIterable, Identifiable, Hashable {
     var filled: String {
         switch self {
         case .home: return "house.fill"
-        case .budget: return "creditcard.fill"
         case .marriage: return "heart.fill"
         case .family: return "person.2.fill"
         case .food: return "fork.knife"

@@ -48,6 +48,7 @@ struct Txn: Decodable, Identifiable, Equatable {
     var merchant: String
     var amountCents: Int
     var kind: String
+    var direction: String?
     var occurredOn: String
     var note: String?
     var source: String

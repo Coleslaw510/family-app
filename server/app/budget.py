@@ -515,6 +515,7 @@ def _txn(row) -> dict:
         "merchant": row["merchant"],
         "amount_cents": int(row["amount_cents"]),
         "kind": row["kind"],
+        "direction": row["direction"],
         "occurred_on": row["occurred_on"],
         "note": row["note"],
         "source": row["source"],

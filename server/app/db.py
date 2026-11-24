@@ -474,6 +474,28 @@ CREATE TABLE IF NOT EXISTS simplefin_transaction_ids (
 CREATE INDEX IF NOT EXISTS idx_simplefin_txn_transaction ON simplefin_transaction_ids(transaction_id);
 """
 
+V13_SQL = """
+CREATE TABLE IF NOT EXISTS transaction_rules (
+    id TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL,
+    pattern TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    flow_direction TEXT NOT NULL DEFAULT 'any',
+    category_id TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_transaction_rules_family ON transaction_rules(family_id);
+CREATE TABLE IF NOT EXISTS budget_pairings (
+    code_hash TEXT PRIMARY KEY,
+    family_id TEXT NOT NULL,
+    member_id TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    used_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_budget_pairings_member ON budget_pairings(member_id, created_at);
+"""
+
 
 def init_db(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
@@ -494,6 +516,59 @@ def init_db(conn: sqlite3.Connection) -> None:
         if row is None:
             conn.execute(
                 "INSERT INTO schema_migrations (version, applied_at) VALUES (12, ?)",
+                (now_iso(),),
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        if conn.execute("SELECT 1 FROM schema_migrations WHERE version = 13").fetchone() is None:
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(transactions)")}
+            if "direction" not in columns:
+                conn.execute("ALTER TABLE transactions ADD COLUMN direction TEXT NOT NULL DEFAULT 'outflow'")
+                conn.execute(
+                    "UPDATE transactions SET direction = CASE WHEN kind = 'income' THEN 'inflow' ELSE 'outflow' END"
+                )
+            for statement in V13_SQL.split(";"):
+                if statement.strip():
+                    conn.execute(statement)
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO transaction_rules (id, family_id, pattern, kind, flow_direction, category_id, created_at)
+                SELECT id, family_id, pattern, 'expense', 'outflow', category_id, created_at
+                FROM category_rules
+                """
+            )
+            conn.execute(
+                "INSERT INTO schema_migrations (version, applied_at) VALUES (13, ?)",
+                (now_iso(),),
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        if conn.execute("SELECT 1 FROM schema_migrations WHERE version = 14").fetchone() is None:
+            card_payment_patterns = (
+                "credit card payment",
+                "credit card pmt",
+                "credit card autopay",
+                "card payment",
+                "card pmt",
+                "payment thank you",
+                "autopay credit card",
+            )
+            for pattern in card_payment_patterns:
+                conn.execute(
+                    "UPDATE transactions SET kind = 'transfer', category_id = NULL WHERE kind = 'expense' AND direction = 'outflow' AND lower(merchant) LIKE ?",
+                    (f"%{pattern}%",),
+                )
+            conn.execute(
+                "INSERT INTO schema_migrations (version, applied_at) VALUES (14, ?)",
                 (now_iso(),),
             )
         conn.commit()

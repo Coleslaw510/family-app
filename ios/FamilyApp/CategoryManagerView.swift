@@ -6,9 +6,6 @@ struct CategoryManagerView: View {
     @State private var editing: CategorySpend?
     @State private var creating = false
     @State private var pending: CategorySpend?
-    @State private var rules: [CategoryRule] = []
-    @State private var pattern = ""
-    @State private var ruleCategory = ""
 
     private var categories: [CategorySpend] { app.budget?.categories ?? [] }
 
@@ -37,26 +34,15 @@ struct CategoryManagerView: View {
                     }
                     .onMove(perform: move)
                 }
-                Section("Auto-categorize rules") {
-                    ForEach(rules) { rule in
-                        HStack {
-                            Text("“\(rule.pattern)” → \(rule.categoryName)")
-                            Spacer()
-                            Button { Task { await deleteRule(rule) } } label: {
-                                Image(systemName: "trash").foregroundStyle(Theme.soft)
-                            }
-                            .buttonStyle(.plain)
-                        }
+                Section("Transaction classification") {
+                    NavigationLink {
+                        TransactionRulesView()
+                    } label: {
+                        Label("Edit transaction rules", systemImage: "line.3.horizontal.decrease.circle")
                     }
-                    TextField("Merchant contains…", text: $pattern)
-                    Picker("Category", selection: $ruleCategory) {
-                        Text("Choose").tag("")
-                        ForEach(categories) { category in
-                            Text(category.name).tag(category.id)
-                        }
-                    }
-                    Button("Add rule") { Task { await addRule() } }
-                        .disabled(pattern.trimmingCharacters(in: .whitespaces).count < 2 || ruleCategory.isEmpty)
+                    Text("Classify expenses, irregular income, and transfers. Rules can also fix existing transactions.")
+                        .font(.footnote)
+                        .foregroundStyle(Theme.muted)
                 }
             }
             .navigationTitle("Categories")
@@ -68,7 +54,6 @@ struct CategoryManagerView: View {
                 }
             }
             .environment(\.editMode, .constant(.active))
-            .task { await loadRules() }
             .sheet(isPresented: $creating) { CategoryEditor(existing: nil) }
             .sheet(item: $editing) { category in CategoryEditor(existing: category) }
             .confirmationDialog(
@@ -114,33 +99,6 @@ struct CategoryManagerView: View {
         }
     }
 
-    private func loadRules() async {
-        if let list: RuleList = try? await app.api.get("/v1/category-rules") {
-            rules = list.rules
-        }
-    }
-
-    private func addRule() async {
-        do {
-            let _: JSONAck = try await app.api.post(
-                "/v1/category-rules",
-                body: RuleBody(pattern: pattern, categoryId: ruleCategory)
-            )
-            pattern = ""
-            await loadRules()
-        } catch {
-            app.report(error)
-        }
-    }
-
-    private func deleteRule(_ rule: CategoryRule) async {
-        do {
-            let _: JSONAck = try await app.api.delete("/v1/category-rules/\(rule.id)")
-            await loadRules()
-        } catch {
-            app.report(error)
-        }
-    }
 }
 
 struct CategoryEditor: View {

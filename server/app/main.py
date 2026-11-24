@@ -19,10 +19,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from . import budget as budget_math
+from .classifier import classify_transaction
 from .db import db, hash_secret, many, month_bounds, new_id, now_iso, one, plus_days, plus_hours, seed_categories
 
 log = logging.getLogger("family")
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 EXTRA_COLORS = ["#2563eb", "#0f766e", "#b45309", "#0369a1", "#7c3aed", "#be185d", "#ea580c", "#475569"]
 
@@ -164,6 +165,59 @@ def create_app() -> FastAPI:
             "family": family_out(family),
             "member": member_out(member),
             "members": [member_out(m) for m in members],
+        }
+
+    @app.post("/v1/budget-app/pairing-code")
+    def create_budget_pairing_code(auth=Depends(require_user)):
+        code = "".join(secrets.choice(ALPHABET) for _ in range(12))
+        created = now_iso()
+        expires = (datetime.now(timezone.utc) + timedelta(minutes=10)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        with db() as conn:
+            conn.execute("DELETE FROM budget_pairings WHERE member_id = ?", (auth["member_id"],))
+            conn.execute(
+                "INSERT INTO budget_pairings (code_hash, family_id, member_id, created_at, expires_at) VALUES (?, ?, ?, ?, ?)",
+                (hash_secret(code), auth["family_id"], auth["member_id"], created, expires),
+            )
+        return {"pairing_code": code, "expires_at": expires}
+
+    @app.post("/v1/budget-app/redeem")
+    def redeem_budget_pairing(body: PairingRedeemIn, request: Request):
+        ip = client_ip(request)
+        limiter: AttemptLimiter = request.app.state.limiter
+        limiter.ensure(f"budget-pair:{ip}", limit=8, window=900)
+        code = normalize_code(body.code)
+        if len(code) != 12:
+            limiter.fail(f"budget-pair:{ip}")
+            raise HTTPException(400, "That pairing code is invalid, expired, or already used.")
+        with db() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            row = one(conn, "SELECT * FROM budget_pairings WHERE code_hash = ?", (hash_secret(code),))
+            now = now_iso()
+            if row is None or row["used_at"] is not None or row["expires_at"] < now:
+                limiter.fail(f"budget-pair:{ip}")
+                raise HTTPException(400, "That pairing code is invalid, expired, or already used.")
+            member = one(conn, "SELECT * FROM members WHERE id = ? AND family_id = ?", (row["member_id"], row["family_id"]))
+            family = one(conn, "SELECT * FROM families WHERE id = ?", (row["family_id"],))
+            if member is None or family is None:
+                limiter.fail(f"budget-pair:{ip}")
+                raise HTTPException(400, "That pairing code is invalid, expired, or already used.")
+            changed = conn.execute(
+                "UPDATE budget_pairings SET used_at = ? WHERE code_hash = ? AND used_at IS NULL",
+                (now, row["code_hash"]),
+            ).rowcount
+            if not changed:
+                limiter.fail(f"budget-pair:{ip}")
+                raise HTTPException(400, "That pairing code is invalid, expired, or already used.")
+            token, expires = issue_session(conn, member["id"])
+            members = many(conn, "SELECT * FROM members WHERE family_id = ? ORDER BY created_at", (family["id"],))
+        return {
+            "token": token,
+            "token_expires_at": expires,
+            "join_code": None,
+            "join_code_expires_at": None,
+            "family": family_out(family),
+            "member": member_out(member),
+            "members": [member_out(item) for item in members],
         }
 
     @app.post("/v1/logout")
@@ -310,6 +364,7 @@ def create_app() -> FastAPI:
                 "DELETE FROM category_rules WHERE category_id = ? AND family_id = ?",
                 (category_id, auth["family_id"]),
             )
+            conn.execute("DELETE FROM transaction_rules WHERE category_id = ? AND family_id = ?", (category_id, auth["family_id"]))
             conn.execute("DELETE FROM category_budgets WHERE category_id = ?", (category_id,))
             conn.execute("DELETE FROM categories WHERE id = ?", (category_id,))
         return {"ok": True, "moved": txn_count, "reassign_to": target}
@@ -354,8 +409,11 @@ def create_app() -> FastAPI:
         occurred = parse_date(body.occurred_on)
         check_cents(body.amount_cents)
         kind = clean_kind(body.kind)
+        direction = clean_direction(body.direction or ("inflow" if kind == "income" else "outflow"))
         merchant = clean_text(body.merchant, "Merchant", 80)
         category_id = body.category_id or None
+        if kind != "expense":
+            category_id = None
         with db() as conn:
             if category_id:
                 own_category(conn, auth["family_id"], category_id)
@@ -364,8 +422,8 @@ def create_app() -> FastAPI:
                 """
                 INSERT INTO transactions (
                     id, family_id, category_id, member_id, merchant, amount_cents,
-                    kind, occurred_on, note, source, created_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual', ?)
+                    kind, direction, occurred_on, note, source, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual', ?)
                 """,
                 (
                     tid,
@@ -375,6 +433,7 @@ def create_app() -> FastAPI:
                     merchant,
                     body.amount_cents,
                     kind,
+                    direction,
                     occurred,
                     blank(body.note),
                     now_iso(),
@@ -392,22 +451,29 @@ def create_app() -> FastAPI:
                 check_cents(body.amount_cents)
                 amount = body.amount_cents
             kind = clean_kind(body.kind) if body.kind is not None else row["kind"]
+            direction = clean_direction(body.direction) if body.direction is not None else row["direction"]
+            if body.direction is None and body.kind == "income":
+                direction = "inflow"
+            elif body.direction is None and body.kind == "expense":
+                direction = "outflow"
             occurred = parse_date(body.occurred_on) if body.occurred_on is not None else row["occurred_on"]
             category_id = row["category_id"]
             if "category_id" in body.model_fields_set:
                 category_id = body.category_id or None
                 if category_id:
                     own_category(conn, auth["family_id"], category_id)
+            if kind != "expense":
+                category_id = None
             note = row["note"] if body.note is None and "note" not in body.model_fields_set else blank(body.note)
             if "note" in body.model_fields_set:
                 note = blank(body.note)
             conn.execute(
                 """
                 UPDATE transactions
-                SET merchant = ?, amount_cents = ?, kind = ?, occurred_on = ?, category_id = ?, note = ?
+                SET merchant = ?, amount_cents = ?, kind = ?, direction = ?, occurred_on = ?, category_id = ?, note = ?
                 WHERE id = ? AND family_id = ?
                 """,
-                (merchant, amount, kind, occurred, category_id, note, txn_id, auth["family_id"]),
+                (merchant, amount, kind, direction, occurred, category_id, note, txn_id, auth["family_id"]),
             )
             return txn_by_id(conn, auth["family_id"], txn_id)
 
@@ -437,34 +503,39 @@ def create_app() -> FastAPI:
                 kind = clean_kind(row.kind or "expense")
             except HTTPException as exc:
                 raise HTTPException(400, f"Row {index}: {exc.detail}") from exc
-            prepared.append((occurred, merchant, row.amount_cents, kind, blank(row.category)))
+            direction = "inflow" if kind == "income" else "outflow"
+            prepared.append((occurred, merchant, row.amount_cents, kind, direction, blank(row.category)))
         with db() as conn:
             imported = 0
             skipped = 0
             created_categories = 0
-            for occurred, merchant, amount, kind, category_name in prepared:
+            for occurred, merchant, amount, initial_kind, direction, category_name in prepared:
+                kind, category_id, matched_rule = classify_transaction(
+                    conn, auth["family_id"], merchant, initial_kind, direction
+                )
+                if category_name and kind == "expense" and matched_rule is None:
+                    imported_category_id, made = match_or_create_category(conn, auth["family_id"], category_name)
+                    created_categories += int(made)
+                    if imported_category_id:
+                        category_id = imported_category_id
                 existing = one(
                     conn,
                     """
                     SELECT id FROM transactions
                     WHERE family_id = ? AND occurred_on = ? AND merchant = ?
-                      AND amount_cents = ? AND kind = ? AND source = 'import'
+                      AND amount_cents = ? AND direction = ? AND source = 'import'
                     """,
-                    (auth["family_id"], occurred, merchant, amount, kind),
+                    (auth["family_id"], occurred, merchant, amount, direction),
                 )
                 if existing:
                     skipped += 1
                     continue
-                category_id = None
-                if category_name:
-                    category_id, made = match_or_create_category(conn, auth["family_id"], category_name)
-                    created_categories += int(made)
                 conn.execute(
                     """
                     INSERT INTO transactions (
                         id, family_id, category_id, member_id, merchant, amount_cents,
-                        kind, occurred_on, note, source, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 'import', ?)
+                        kind, direction, occurred_on, note, source, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, 'import', ?)
                     """,
                     (
                         new_id(),
@@ -474,6 +545,7 @@ def create_app() -> FastAPI:
                         merchant,
                         amount,
                         kind,
+                        direction,
                         occurred,
                         now_iso(),
                     ),
@@ -1237,6 +1309,10 @@ class JoinIn(BaseModel):
     name: str
 
 
+class PairingRedeemIn(BaseModel):
+    code: str
+
+
 class NameIn(BaseModel):
     name: str
 
@@ -1276,6 +1352,7 @@ class TxnIn(BaseModel):
     merchant: str
     amount_cents: int
     kind: str = "expense"
+    direction: str | None = None
     occurred_on: str
     category_id: str | None = None
     note: str | None = None
@@ -1285,6 +1362,7 @@ class TxnPatch(BaseModel):
     merchant: str | None = None
     amount_cents: int | None = None
     kind: str | None = None
+    direction: str | None = None
     occurred_on: str | None = None
     category_id: str | None = None
     note: str | None = None
@@ -1585,8 +1663,14 @@ def clean_color(value: str | None) -> str:
 
 
 def clean_kind(value: str) -> str:
-    if value not in {"expense", "income"}:
-        raise HTTPException(400, "Kind must be expense or income.")
+    if value not in {"expense", "income", "transfer"}:
+        raise HTTPException(400, "Kind must be expense, income, or transfer.")
+    return value
+
+
+def clean_direction(value: str) -> str:
+    if value not in {"inflow", "outflow"}:
+        raise HTTPException(400, "Direction must be inflow or outflow.")
     return value
 
 

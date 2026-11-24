@@ -122,6 +122,8 @@ def test_connect_sync_signed_conversion_overlap_dedup_and_family_isolation(clien
         "transactions": [
             {"id": "tx-expense", "posted": timestamp, "amount": "-12.34", "description": "Kroger groceries", "pending": False},
             {"id": "tx-income", "posted": timestamp, "amount": "1250.00", "description": "Payroll", "pending": False},
+            {"id": "tx-card-payment", "posted": timestamp, "amount": "-250.00", "description": "Credit Card Payment - Visa", "pending": False},
+            {"id": "tx-venmo", "posted": timestamp, "amount": "42.50", "description": "Venmo from a friend", "pending": False},
             {"id": "tx-pending", "posted": timestamp, "amount": "-88.00", "description": "Pending", "pending": True},
         ],
     }]})
@@ -134,14 +136,21 @@ def test_connect_sync_signed_conversion_overlap_dedup_and_family_isolation(clien
 
     first = client.post("/v1/simplefin/sync", headers=headers)
     assert first.status_code == 200, first.text
-    assert first.json()["imported"] == 2
+    assert first.json()["imported"] == 4
     txns = client.get("/v1/transactions", headers=headers).json()["transactions"]
     by_merchant = {item["merchant"]: item for item in txns}
     expense = by_merchant["Kroger groceries"]
     income = by_merchant["Payroll"]
+    card_payment = by_merchant["Credit Card Payment - Visa"]
+    venmo = by_merchant["Venmo from a friend"]
     assert (expense["amount_cents"], expense["kind"], expense["occurred_on"], expense["source"]) == (1234, "expense", "2026-11-22", "simplefin")
     assert expense["category_name"] == "Groceries"
     assert (income["amount_cents"], income["kind"]) == (125000, "income")
+    assert (card_payment["amount_cents"], card_payment["kind"], card_payment["direction"]) == (25000, "transfer", "outflow")
+    assert (venmo["amount_cents"], venmo["kind"], venmo["direction"]) == (4250, "income", "inflow")
+    budget = client.get("/v1/budget?month=2026-11&today=2026-11-22", headers=headers).json()
+    assert budget["spent_cents"] == 1234
+    assert budget["income_from_transactions_cents"] == 129250
 
     limited = client.post("/v1/simplefin/sync", headers=headers)
     assert limited.status_code == 429
@@ -150,12 +159,32 @@ def test_connect_sync_signed_conversion_overlap_dedup_and_family_isolation(clien
     second = client.post("/v1/simplefin/sync", headers=headers)
     assert second.status_code == 200, second.text
     assert second.json()["imported"] == 0
-    assert second.json()["skipped"] == 2
+    assert second.json()["skipped"] == 4
     url, params, _auth = mock.get_calls[-1]
     assert url.endswith("/accounts")
     assert params["version"] == "2"
     assert int(params["end-date"]) - int(params["start-date"]) <= 90 * 24 * 60 * 60
-    assert len(txns) == 2
+    assert len(txns) == 4
+
+
+def test_v14_reclassifies_historical_card_payment_but_not_purchases(client):
+    _created, headers = create_family(client)
+    payment = client.post(
+        "/v1/transactions",
+        headers=headers,
+        json={"merchant": "Payment Thank You - Card", "amount_cents": 40000, "occurred_on": "2026-11-19", "kind": "expense"},
+    ).json()
+    purchase = client.post(
+        "/v1/transactions",
+        headers=headers,
+        json={"merchant": "Card purchase at Market", "amount_cents": 12000, "occurred_on": "2026-11-19", "kind": "expense"},
+    ).json()
+    with db() as conn:
+        conn.execute("DELETE FROM schema_migrations WHERE version = 14")
+    txns = client.get("/v1/transactions", headers=headers).json()["transactions"]
+    by_id = {txn["id"]: txn for txn in txns}
+    assert by_id[payment["id"]]["kind"] == "transfer"
+    assert by_id[purchase["id"]]["kind"] == "expense"
 
 
 def test_disconnect_is_household_scoped(client, monkeypatch):

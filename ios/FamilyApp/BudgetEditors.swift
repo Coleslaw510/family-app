@@ -47,6 +47,7 @@ struct TransactionEditor: View {
     @State private var merchant = ""
     @State private var amount = ""
     @State private var kind = "expense"
+    @State private var direction = "outflow"
     @State private var day = Date()
     @State private var categoryId = ""
     @State private var note = ""
@@ -60,13 +61,26 @@ struct TransactionEditor: View {
             Picker("Type", selection: $kind) {
                 Text("Expense").tag("expense")
                 Text("Income").tag("income")
+                Text("Transfer").tag("transfer")
             }
             .pickerStyle(.segmented)
+            if kind == "transfer" {
+                Picker("Transfer direction", selection: $direction) {
+                    Text("Outflow").tag("outflow")
+                    Text("Inflow").tag("inflow")
+                }
+                .pickerStyle(.segmented)
+                Text("Transfers are recorded for account movement, but excluded from spending and income totals.")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Theme.muted)
+            }
             DatePicker("Date", selection: $day, displayedComponents: .date)
-            Picker("Category", selection: $categoryId) {
-                Text("None").tag("")
-                ForEach(app.budget?.categories ?? []) { category in
-                    Text(category.name).tag(category.id)
+            if kind == "expense" {
+                Picker("Category", selection: $categoryId) {
+                    Text("None").tag("")
+                    ForEach(app.budget?.categories ?? []) { category in
+                        Text(category.name).tag(category.id)
+                    }
                 }
             }
             LabeledInput(title: "Note", text: $note)
@@ -83,6 +97,7 @@ struct TransactionEditor: View {
         merchant = existing.merchant
         amount = Money.plain(existing.amountCents)
         kind = existing.kind
+        direction = existing.direction ?? (existing.kind == "income" ? "inflow" : "outflow")
         day = Dates.parseDay(existing.occurredOn) ?? Date()
         categoryId = existing.categoryId ?? ""
         note = existing.note ?? ""
@@ -101,6 +116,7 @@ struct TransactionEditor: View {
             merchant: trimmed,
             amountCents: cents,
             kind: kind,
+            direction: kind == "transfer" ? direction : nil,
             occurredOn: Dates.isoDay(day),
             categoryId: categoryId,
             note: note.trimmingCharacters(in: .whitespaces)

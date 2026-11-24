@@ -639,11 +639,13 @@ struct BudgetView: View {
     private func txnRow(_ txn: Txn) -> some View {
         let index = app.members.firstIndex { $0.id == txn.memberId } ?? 0
         let income = txn.kind == "income"
+        let transfer = txn.kind == "transfer"
+        let directionLabel = transfer ? "Transfer \(txn.direction == "inflow" ? "in" : "out")" : (txn.categoryName ?? txn.kind.capitalized)
         return HStack(spacing: 10) {
-            IconTile(system: txn.categoryIcon ?? (income ? "banknote" : "tag"), colors: [Color(hexString: txn.categoryColor ?? "#64748b"), Color(hexString: txn.categoryColor ?? "#64748b")], size: 32)
+            IconTile(system: txn.categoryIcon ?? (transfer ? "arrow.left.arrow.right" : income ? "banknote" : "tag"), colors: [Color(hexString: txn.categoryColor ?? "#64748b"), Color(hexString: txn.categoryColor ?? "#64748b")], size: 32)
             VStack(alignment: .leading, spacing: 1) {
                 Text(txn.merchant).font(.system(size: 13.5, weight: .bold)).lineLimit(1)
-                Text("\(txn.categoryName ?? txn.kind.capitalized) · \(Dates.shortDay(txn.occurredOn))")
+                Text("\(directionLabel) · \(Dates.shortDay(txn.occurredOn))")
                     .font(.system(size: 11.5, weight: .medium))
                     .foregroundStyle(Theme.muted)
             }
@@ -651,9 +653,9 @@ struct BudgetView: View {
             if let name = txn.memberName {
                 Avatar(name: name, index: index, size: 22)
             }
-            Text((income ? "+" : "") + Money.format(txn.amountCents, showCents: true))
+            Text((income ? "+" : transfer ? "↔ " : "") + Money.format(txn.amountCents, showCents: true))
                 .font(.system(size: 13.5, weight: .heavy))
-                .foregroundStyle(income ? Theme.good : Theme.text)
+                .foregroundStyle(income ? Theme.good : transfer ? Theme.muted : Theme.text)
         }
     }
 

@@ -19,6 +19,7 @@ from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from .db import db, many, new_id, now_iso, one
+from .classifier import classify_transaction
 
 log = logging.getLogger("family.simplefin")
 MAX_DAYS = 90
@@ -130,29 +131,9 @@ def _amount(raw) -> tuple[int, str] | None:
 
 
 def _categorize(conn, family_id: str, description: str, kind: str) -> str | None:
-    if kind != "expense":
-        return None
-    lowered = description.lower()
-    rules = many(conn, """
-        SELECT r.pattern, r.category_id FROM category_rules r
-        JOIN categories c ON c.id = r.category_id AND c.family_id = r.family_id
-        WHERE r.family_id = ? AND c.archived = 0 ORDER BY length(r.pattern) DESC
-    """, (family_id,))
-    for rule in rules:
-        if rule["pattern"].lower() in lowered:
-            return rule["category_id"]
-    defaults = [
-        (("kroger", "walmart", "costco", "grocery", "market"), "Groceries"),
-        (("restaurant", "doordash", "uber eats", "cafe", "coffee"), "Dining"),
-        (("shell", "chevron", "fuel", "gas station"), "Fuel"),
-        (("electric", "water bill", "utility", "internet"), "Bills / Utilities"),
-    ]
-    for terms, name in defaults:
-        if any(term in lowered for term in terms):
-            row = one(conn, "SELECT id FROM categories WHERE family_id = ? AND lower(name) = lower(?) AND archived = 0", (family_id, name))
-            if row:
-                return row["id"]
-    return None
+    direction = "inflow" if kind == "income" else "outflow"
+    _, category_id, _ = classify_transaction(conn, family_id, description, kind, direction)
+    return category_id
 
 
 def _parse_provider_accounts(payload) -> list[dict]:
@@ -247,8 +228,11 @@ def _sync_family(family_id: str, *, force: bool = False) -> dict:
                 description = re.sub(r"\s+", " ", str(item.get("description") or "SimpleFIN transaction")).strip()[:80] or "SimpleFIN transaction"
                 if not day or not parsed:
                     continue
-                cents, kind = parsed
-                category_id = _categorize(conn, family_id, description, kind)
+                cents, initial_kind = parsed
+                direction = "inflow" if initial_kind == "income" else "outflow"
+                kind, category_id, _ = classify_transaction(
+                    conn, family_id, description, initial_kind, direction
+                )
                 row_id = new_id()
                 mapping = conn.execute(
                     "INSERT OR IGNORE INTO simplefin_transaction_ids (family_id, connection_id, account_identity, transaction_identity, transaction_id) VALUES (?, ?, ?, ?, ?)",
@@ -258,9 +242,9 @@ def _sync_family(family_id: str, *, force: bool = False) -> dict:
                     skipped += 1
                     continue
                 conn.execute("""
-                    INSERT INTO transactions (id, family_id, category_id, member_id, merchant, amount_cents, kind, occurred_on, note, source, created_at)
-                    VALUES (?, ?, ?, NULL, ?, ?, ?, ?, NULL, 'simplefin', ?)
-                """, (row_id, family_id, category_id, description, cents, kind, day, now_iso()))
+                    INSERT INTO transactions (id, family_id, category_id, member_id, merchant, amount_cents, kind, direction, occurred_on, note, source, created_at)
+                    VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, NULL, 'simplefin', ?)
+                """, (row_id, family_id, category_id, description, cents, kind, direction, day, now_iso()))
                 imported += 1
         synced = now_iso()
         conn.execute("UPDATE simplefin_connections SET last_synced_at = ?, last_error = NULL WHERE family_id = ?", (synced, family_id))

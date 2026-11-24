@@ -58,6 +58,25 @@ def test_create_join_and_reuse(client):
     assert len(fresh.json()["join_code"]) == 6
 
 
+def test_budget_app_pairing_code_is_one_use_and_expires(client):
+    _created, headers = create_family(client)
+    issued = client.post("/v1/budget-app/pairing-code", headers=headers)
+    assert issued.status_code == 200, issued.text
+    code = issued.json()["pairing_code"]
+    redeemed = client.post("/v1/budget-app/redeem", json={"code": code})
+    assert redeemed.status_code == 200, redeemed.text
+    assert redeemed.json()["family"]["name"] == "Cole & Partner"
+    assert client.get("/v1/me", headers={"Authorization": f"Bearer {redeemed.json()['token']}"}).status_code == 200
+    assert client.post("/v1/budget-app/redeem", json={"code": code}).status_code == 400
+
+    second = client.post("/v1/budget-app/pairing-code", headers=headers).json()["pairing_code"]
+    conn = sqlite3.connect(os.environ["DB_PATH"])
+    conn.execute("UPDATE budget_pairings SET expires_at = '2000-01-01T00:00:00Z' WHERE code_hash = ?", (__import__("hashlib").sha256(second.encode()).hexdigest(),))
+    conn.commit()
+    conn.close()
+    assert client.post("/v1/budget-app/redeem", json={"code": second}).status_code == 400
+
+
 def test_join_rate_limit_and_expiry(client):
     created, _headers = create_family(client)
     for _ in range(3):
@@ -168,6 +187,34 @@ def test_budget_math_import_and_suggest(client):
     march = client.get("/v1/budget?month=2026-03&today=2026-03-01", headers=headers).json()
     march_groceries = next(item for item in march["categories"] if item["name"] == "Groceries")
     assert march_groceries["budget_cents"] == 20000
+
+
+def test_transfer_rows_do_not_count_as_spending_and_income_is_irregular(client):
+    _created, headers = create_family(client)
+    groceries = next(
+        item for item in client.get("/v1/categories", headers=headers).json()["categories"]
+        if item["name"] == "Groceries"
+    )
+    purchase = client.post(
+        "/v1/transactions",
+        headers=headers,
+        json={"merchant": "Card purchase at Market", "amount_cents": 25000, "occurred_on": "2026-11-20", "kind": "expense", "category_id": groceries["id"]},
+    )
+    payment = client.post(
+        "/v1/transactions",
+        headers=headers,
+        json={"merchant": "Pay credit card", "amount_cents": 25000, "occurred_on": "2026-11-21", "kind": "transfer", "direction": "outflow"},
+    )
+    venmo = client.post(
+        "/v1/transactions",
+        headers=headers,
+        json={"merchant": "Venmo from friend", "amount_cents": 4000, "occurred_on": "2026-11-21", "kind": "income"},
+    )
+    assert (purchase.json()["kind"], payment.json()["kind"], venmo.json()["direction"]) == ("expense", "transfer", "inflow")
+    summary = client.get("/v1/budget?month=2026-11&today=2026-11-21", headers=headers).json()
+    assert summary["spent_cents"] == 25000
+    assert summary["income_from_transactions_cents"] == 4000
+    assert {row["kind"] for row in summary["transactions"]} >= {"expense", "transfer", "income"}
 
 
 def test_income_bill_payment_and_account(client):

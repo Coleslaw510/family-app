@@ -43,6 +43,44 @@ struct RuleBody: Encodable {
     var categoryId: String
 }
 
+struct TransactionRule: Decodable, Identifiable {
+    var id: String
+    var pattern: String
+    var kind: String
+    var flowDirection: String
+    var categoryId: String?
+    var categoryName: String?
+}
+
+struct TransactionRuleList: Decodable {
+    var rules: [TransactionRule]
+}
+
+struct BudgetPairingCode: Decodable {
+    var pairingCode: String
+    var expiresAt: String
+}
+
+struct BudgetPairingRedeemBody: Encodable {
+    var code: String
+}
+
+struct TransactionRuleBody: Encodable {
+    var pattern: String
+    var kind: String
+    var flowDirection: String
+    var categoryId: String?
+    var applyToExisting: Bool
+}
+
+struct TransactionRulePatchBody: Encodable {
+    var pattern: String
+    var kind: String
+    var flowDirection: String
+    var categoryId: String?
+    var applyToExisting: Bool
+}
+
 struct ImportCommitBody: Encodable {
     var dateColumn: Int
     var descriptionColumn: Int
