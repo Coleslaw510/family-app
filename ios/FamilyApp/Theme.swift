@@ -27,8 +27,8 @@ enum Theme {
     static let text = Color.primary
     static let muted = Color.secondary
     static let soft = Color(uiColor: .tertiaryLabel)
-    static let accent = Color(uiColor: .systemBlue)
-    static let accent2 = Color(uiColor: .systemBlue)
+    static let accent = Color(hex: 0x5F83B8)
+    static let accent2 = Color(hex: 0x5F83B8)
     static let navy = Color(uiColor: .systemIndigo)
     static let good = Color(uiColor: .systemGreen)
     static let goodBg = good.opacity(0.14)
@@ -36,10 +36,10 @@ enum Theme {
     static let warnBg = warn.opacity(0.15)
     static let bad = Color(uiColor: .systemRed)
     static let badBg = bad.opacity(0.14)
-    static let marriage = Color(uiColor: .systemPink)
-    static let family = Color(uiColor: .systemTeal)
-    static let calendar = Color(uiColor: .systemPurple)
-    static let vacation = Color(uiColor: .systemOrange)
+    static let marriage = Color(hex: 0xC96A91)
+    static let family = Color(hex: 0x5A9E94)
+    static let calendar = Color(hex: 0x8374B6)
+    static let vacation = Color(hex: 0xC98251)
     static let insightBg = warn.opacity(0.12)
     static let insightLine = warn.opacity(0.3)
     static let insightText = Color(uiColor: .secondaryLabel)
@@ -48,15 +48,15 @@ enum Theme {
     static let noteText = marriage
     static let safeBg = accent.opacity(0.12)
 
-    static let budgetGradient = [Color(hex: 0x60A5FA), Color(hex: 0x1E3A8A)]
-    static let marriageGradient = [Color(hex: 0xF472B6), Color(hex: 0xBE185D)]
-    static let familyGradient = [Color(hex: 0x2DD4BF), Color(hex: 0x0F766E)]
-    static let calendarGradient = [Color(hex: 0xA78BFA), Color(hex: 0x6D28D9)]
-    static let vacationGradient = [Color(hex: 0xFB923C), Color(hex: 0xC2410C)]
-    static let incomeGradient = [Color(hex: 0x34D399), Color(hex: 0x15803D)]
-    static let importGradient = [Color(hex: 0x38BDF8), Color(hex: 0x0369A1)]
-    static let billsGradient = [Color(hex: 0x94A3B8), Color(hex: 0x334155)]
-    static let aiGradient = [Color(hex: 0xF59E0B), Color(hex: 0xD97706)]
+    static let budgetGradient = [Color(hex: 0xB4CAE9), Color(hex: 0x6889C4)]
+    static let marriageGradient = [Color(hex: 0xF0BDD0), Color(hex: 0xC96A91)]
+    static let familyGradient = [Color(hex: 0xB2DDD7), Color(hex: 0x5A9E94)]
+    static let calendarGradient = [Color(hex: 0xD2C8EE), Color(hex: 0x8374B6)]
+    static let vacationGradient = [Color(hex: 0xF1D0B3), Color(hex: 0xC98251)]
+    static let incomeGradient = [Color(hex: 0xB8E2C7), Color(hex: 0x5D9A70)]
+    static let importGradient = [Color(hex: 0xB8DFEC), Color(hex: 0x4E8EAA)]
+    static let billsGradient = [Color(hex: 0xD5DDE5), Color(hex: 0x728195)]
+    static let aiGradient = [Color(hex: 0xF2DEA9), Color(hex: 0xB18442)]
 }
 
 enum AppTab: String, CaseIterable, Identifiable, Hashable {
@@ -133,7 +133,7 @@ struct IconTile: View {
             .font(.system(size: size * 0.46, weight: .semibold))
             .foregroundStyle(tint)
             .frame(width: size, height: size)
-            .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: size * 0.32, style: .continuous))
+            .background(tint.opacity(0.16), in: RoundedRectangle(cornerRadius: size * 0.32, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: size * 0.32, style: .continuous).stroke(tint.opacity(0.12), lineWidth: 0.75))
     }
 
@@ -206,7 +206,7 @@ struct Avatar: View {
     var body: some View {
         Text(initial)
             .font(.system(size: size * 0.38, weight: .bold))
-            .foregroundStyle(.white)
+            .foregroundStyle(Color(hex: 0x334155))
             .frame(width: size, height: size)
             .background(
                 LinearGradient(colors: palette, startPoint: .topLeading, endPoint: .bottomTrailing)
@@ -223,10 +223,10 @@ struct Avatar: View {
 
     private var palette: [Color] {
         let sets: [[UInt32]] = [
-            [0x3B82F6, 0x1E3A8A],
-            [0x2DD4BF, 0x0F766E],
-            [0xA78BFA, 0x6D28D9],
-            [0xFB923C, 0xC2410C]
+            [0xD5E2F5, 0xB5CAE9],
+            [0xD0E9E5, 0xABD9D2],
+            [0xDFD8F0, 0xC6BCE6],
+            [0xF5DECC, 0xEEC69E]
         ]
         let pair = sets[abs(index) % sets.count]
         return pair.map { Color(hex: $0) }
