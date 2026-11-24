@@ -85,7 +85,7 @@ struct TransactionRulesView: View {
             let _: JSONAck = try await app.api.delete("/v1/transaction-rules/\(rule.id)")
             await load()
         } catch {
-            error = error.localizedDescription
+            self.error = error.localizedDescription
         }
     }
 }
