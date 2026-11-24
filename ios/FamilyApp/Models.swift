@@ -55,6 +55,10 @@ struct Txn: Decodable, Identifiable, Equatable {
     var createdAt: String
 }
 
+struct TransactionList: Decodable {
+    var transactions: [Txn]
+}
+
 struct Dashboard: Decodable {
     var family: Family
     var member: Member
@@ -275,6 +279,7 @@ struct Chore: Decodable, Identifiable {
     var assigneeName: String?
     var done: Bool
     var dueOn: String?
+    var recurrence: String?
     var createdBy: String?
     var completedAt: String?
 }

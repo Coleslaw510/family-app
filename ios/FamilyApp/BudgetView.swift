@@ -13,6 +13,7 @@ enum BudgetSheet: Identifiable {
     case editAccount(Account)
     case importer
     case categories
+    case categoryTransactions(CategorySpend)
     case mortgage
     case ask
     case settings
@@ -30,6 +31,7 @@ enum BudgetSheet: Identifiable {
         case .editAccount(let account): return "acct-\(account.id)"
         case .importer: return "import"
         case .categories: return "categories"
+        case .categoryTransactions(let category): return "category-transactions-\(category.id)"
         case .mortgage: return "mortgage"
         case .ask: return "ask"
         case .settings: return "settings"
@@ -248,6 +250,23 @@ struct BudgetView: View {
                     .font(.system(size: 11.5, weight: .medium))
                     .foregroundStyle(Theme.muted)
                 ForEach(snapshot.categories) { category in
+                    Button { sheet = .categoryTransactions(category) } label: {
+                        HStack(spacing: 9) {
+                            IconTile(system: category.icon, colors: [Color(hexString: category.color), Color(hexString: category.color)], size: 30)
+                            Text(category.name)
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(Theme.text)
+                            Spacer()
+                            Text(Money.format(category.spentCents))
+                                .font(.system(size: 15, weight: .bold))
+                                .foregroundStyle(Theme.text)
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Theme.soft)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                     envelope(category)
                 }
                 if snapshot.uncategorizedCents > 0 {
@@ -271,15 +290,6 @@ struct BudgetView: View {
             return delta >= 0 ? "\(Money.format(delta)) left" : "\(Money.format(-delta)) over"
         }()
         return VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 9) {
-                IconTile(system: category.icon, colors: [Color(hexString: category.color), Color(hexString: category.color)], size: 30)
-                Text(category.name)
-                    .font(.system(size: 13.5, weight: .bold))
-                Spacer()
-                Text(Money.format(category.spentCents))
-                    .font(.system(size: 13.5, weight: .heavy))
-                    .foregroundStyle(over ? Theme.bad : Theme.text)
-            }
             HStack {
                 Button { sheet = .budgets } label: {
                     HStack(spacing: 4) {
@@ -741,6 +751,8 @@ struct BudgetView: View {
             BankImportView()
         case .categories:
             CategoryManagerView()
+        case .categoryTransactions(let category):
+            CategoryTransactionsView(category: category, month: app.budgetMonth)
         case .mortgage:
             MortgageView()
         case .ask:

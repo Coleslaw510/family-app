@@ -467,7 +467,9 @@ def suggest(conn, family_id: str, month: str, today: date, apply: bool) -> dict:
     }
 
 
-def _transactions(conn, family_id: str, start: str | None, end: str | None, limit: int) -> list[dict]:
+def _transactions(
+    conn, family_id: str, start: str | None, end: str | None, limit: int, category_id: str | None = None
+) -> list[dict]:
     sql = """
         SELECT t.*, c.name AS category_name, c.color AS category_color, c.icon AS category_icon,
                m.name AS member_name
@@ -480,6 +482,9 @@ def _transactions(conn, family_id: str, start: str | None, end: str | None, limi
     if start and end:
         sql += " AND t.occurred_on >= ? AND t.occurred_on <= ?"
         args.extend([start, end])
+    if category_id:
+        sql += " AND t.category_id = ?"
+        args.append(category_id)
     sql += " ORDER BY t.occurred_on DESC, t.created_at DESC LIMIT ?"
     args.append(limit)
     return [_txn(row) for row in many(conn, sql, tuple(args))]

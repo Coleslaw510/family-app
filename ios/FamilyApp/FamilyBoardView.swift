@@ -1,11 +1,12 @@
 import SwiftUI
 
 private enum FamilySheet: Identifiable {
-    case settings, chore, grocery, note, date
+    case settings, chore, editChore(Chore), grocery, note, date
     var id: String {
         switch self {
         case .settings: return "settings"
         case .chore: return "chore"
+        case .editChore(let chore): return "chore-\(chore.id)"
         case .grocery: return "grocery"
         case .note: return "note"
         case .date: return "date"
@@ -53,6 +54,7 @@ struct FamilyBoardView: View {
                 switch item {
                 case .settings: SettingsView()
                 case .chore: ChoreEditor()
+                case .editChore(let chore): ChoreEditor(existing: chore)
                 case .grocery: QuickNoteEditor(kind: "grocery", title: "Grocery item")
                 case .note: QuickNoteEditor(kind: "note", title: "Shared note")
                 case .date: ImportantDateEditor()
@@ -72,18 +74,24 @@ struct FamilyBoardView: View {
                 }
                 ForEach(items) { chore in
                     HStack(spacing: 8) {
-                        Button { Task { await app.toggleChore(id: chore.id, done: !chore.done) } } label: {
+                        Button { Task { await app.toggleChore(id: chore.id, done: !chore.done, expectedDueOn: chore.dueOn) } } label: {
                             CheckBox(done: chore.done, color: Theme.family)
                         }
                         .buttonStyle(.plain)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(chore.title)
-                                .font(.system(size: 14, weight: .semibold))
-                                .strikethrough(chore.done)
-                            Text(chore.assigneeName ?? "Anyone")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(Theme.muted)
+                        Button { sheet = .editChore(chore) } label: {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(chore.title)
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .strikethrough(chore.done)
+                                    .foregroundStyle(chore.done ? Theme.muted : Theme.text)
+                                Text(choreSchedule(chore))
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundStyle(Theme.muted)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
                         Spacer()
                         Button { Task { await delete("/v1/chores/\(chore.id)") } } label: {
                             Image(systemName: "trash").foregroundStyle(Theme.soft)
@@ -188,17 +196,31 @@ struct FamilyBoardView: View {
             app.report(error)
         }
     }
+
+    private func choreSchedule(_ chore: Chore) -> String {
+        var parts = [chore.assigneeName ?? "Anyone"]
+        if let due = chore.dueOn { parts.append("Due \(Dates.shortDay(due))") }
+        if let recurrence = chore.recurrence, recurrence != "none" {
+            parts.append("Repeats \(recurrence)")
+        }
+        return parts.joined(separator: " · ")
+    }
 }
 
 struct ChoreEditor: View {
     @EnvironmentObject private var app: AppModel
     @Environment(\.dismiss) private var dismiss
+    var existing: Chore? = nil
     @State private var title = ""
     @State private var assignee = ""
+    @State private var dueDay = Date()
+    @State private var hasDueDate = false
+    @State private var recurrence = "none"
+    @State private var working = false
     @State private var error: String?
 
     var body: some View {
-        EditorChrome(title: "Chore", working: false, error: error, onSave: { Task { await save() } }) {
+        EditorChrome(title: existing == nil ? "New chore" : "Edit chore", working: working, error: error, onSave: { Task { await save() } }) {
             LabeledInput(title: "What", text: $title, autocap: .sentences)
             Picker("Who", selection: $assignee) {
                 Text("Anyone").tag("")
@@ -206,15 +228,71 @@ struct ChoreEditor: View {
                     Text(member.name).tag(member.id)
                 }
             }
+            Toggle("Has a due date", isOn: $hasDueDate)
+                .onChange(of: hasDueDate) { enabled in
+                    if !enabled { recurrence = "none" }
+                }
+            if hasDueDate {
+                DatePicker("Due", selection: $dueDay, displayedComponents: .date)
+                Picker("Repeats", selection: $recurrence) {
+                    Text("Does not repeat").tag("none")
+                    Text("Daily").tag("daily")
+                    Text("Weekly").tag("weekly")
+                    Text("Monthly").tag("monthly")
+                }
+            } else {
+                Text("Undated chores stay in the Family list and are kept off Home.")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Theme.muted)
+            }
         }
+        .onAppear(perform: load)
+    }
+
+    private func load() {
+        guard let existing else { return }
+        title = existing.title
+        assignee = existing.assigneeId ?? ""
+        if let due = existing.dueOn, let parsed = Dates.parseDay(due) {
+            dueDay = parsed
+            hasDueDate = true
+        } else {
+            hasDueDate = false
+        }
+        recurrence = existing.recurrence ?? "none"
     }
 
     private func save() async {
+        let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanTitle.isEmpty else { error = "Add a chore name."; return }
+        guard recurrence == "none" || hasDueDate else { error = "Choose a due date for a recurring chore."; return }
+        working = true
+        defer { working = false }
+        let due = hasDueDate ? Dates.isoDay(dueDay) : nil
         do {
-            let _: JSONAck = try await app.api.post(
-                "/v1/chores",
-                body: ChoreBody(title: title, assigneeId: assignee.isEmpty ? nil : assignee, dueOn: nil)
-            )
+            if let existing {
+                let _: JSONAck = try await app.api.patch(
+                    "/v1/chores/\(existing.id)",
+                    body: ChorePatchBody(
+                        title: cleanTitle,
+                        assigneeId: assignee.isEmpty ? nil : assignee,
+                        clearAssignee: assignee.isEmpty,
+                        dueOn: due ?? "",
+                        clearDueOn: !hasDueDate,
+                        recurrence: recurrence
+                    )
+                )
+            } else {
+                let _: CreatedId = try await app.api.post(
+                    "/v1/chores",
+                    body: ChoreBody(
+                        title: cleanTitle,
+                        assigneeId: assignee.isEmpty ? nil : assignee,
+                        dueOn: due,
+                        recurrence: recurrence
+                    )
+                )
+            }
             await app.refreshAll(silent: true)
             dismiss()
         } catch {

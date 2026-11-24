@@ -27,18 +27,15 @@ final class AppModel: ObservableObject {
     @Published var banner: String?
     @Published var celebration: Celebration?
     @Published var tab: AppTab = .home
+    @Published var moreSection: AppTab = .marriage
     @Published var openLoveNote = false
 
     let api = APIClient()
-    private let keychainService: String
-    private let budgetOnly: Bool
     private var token: String?
     private var poll: Timer?
     private var refreshTask: Task<Void, Never>?
 
-    init(keychainService: String = KeychainStore.familyService, budgetOnly: Bool = false) {
-        self.keychainService = keychainService
-        self.budgetOnly = budgetOnly
+    init() {
         let stored = UserDefaults.standard.string(forKey: "serverURL")
         let url = (stored?.isEmpty == false ? stored! : AppConfig.defaultServer)
         serverURL = url
@@ -48,7 +45,7 @@ final class AppModel: ObservableObject {
 
     func bootstrap() async {
         api.baseURL = serverURL
-        if let saved = KeychainStore.read(service: keychainService), !saved.isEmpty {
+        if let saved = KeychainStore.read(), !saved.isEmpty {
             token = saved
             api.token = saved
             await refreshAll()
@@ -94,7 +91,7 @@ final class AppModel: ObservableObject {
         let root = api.baseURL
         token = nil
         api.token = nil
-        KeychainStore.clear(service: keychainService)
+        KeychainStore.clear()
         stopPolling()
         clearData()
         phase = .signedOut
@@ -141,28 +138,6 @@ final class AppModel: ObservableObject {
         }
     }
 
-    func newBudgetPairingCode() async -> String? {
-        do {
-            let result: BudgetPairingCode = try await api.post("/v1/budget-app/pairing-code")
-            return result.pairingCode
-        } catch {
-            handle(error)
-            return nil
-        }
-    }
-
-    func pairBudgetApp(code: String) async throws {
-        api.baseURL = normalized(serverURL)
-        let session: SessionResponse = try await api.post(
-            "/v1/budget-app/redeem",
-            body: BudgetPairingRedeemBody(code: code)
-        )
-        store(session)
-        phase = .ready
-        startPolling()
-        await refreshAll()
-    }
-
     /// Pull-to-refresh entry point. SwiftUI cancels a `.refreshable` task as soon as the screen
     /// re-renders (which our own data updates cause), so the work runs in its own task that the
     /// gesture only waits on. A cancelled refresh is never reported as an error.
@@ -187,16 +162,6 @@ final class AppModel: ObservableObject {
             let today = Dates.isoDay(Date())
             let month = budgetMonth
             let api = self.api
-            if budgetOnly {
-                async let budgetCall: BudgetSnapshot = api.get("/v1/budget?month=\(month)&today=\(today)")
-                async let meCall: MeResponse = api.get("/v1/me")
-                let (budgetData, meData) = try await (budgetCall, meCall)
-                if month == budgetMonth { budget = budgetData }
-                apply(meData)
-                lastSynced = Date()
-                banner = nil
-                return
-            }
             async let dashCall: Dashboard = api.get("/v1/dashboard?today=\(today)")
             async let budgetCall: BudgetSnapshot = api.get("/v1/budget?month=\(month)&today=\(today)")
             async let marriageCall: MarriageBundle = api.get("/v1/marriage")
@@ -247,9 +212,12 @@ final class AppModel: ObservableObject {
         await loadBudget()
     }
 
-    func toggleChore(id: String, done: Bool) async {
+    func toggleChore(id: String, done: Bool, expectedDueOn: String? = nil) async {
         do {
-            let _: JSONAck = try await api.patch("/v1/chores/\(id)", body: ChorePatchBody(done: done))
+            let _: JSONAck = try await api.patch(
+                "/v1/chores/\(id)",
+                body: ChorePatchBody(done: done, expectedDueOn: done ? expectedDueOn : nil)
+            )
             Haptics.tap()
             await refreshAll(silent: true)
         } catch {
@@ -303,7 +271,7 @@ final class AppModel: ObservableObject {
     private func store(_ session: SessionResponse) {
         token = session.token
         api.token = session.token
-        KeychainStore.save(session.token, service: keychainService)
+        KeychainStore.save(session.token)
         let url = normalized(serverURL)
         serverURL = url
         api.baseURL = url
@@ -335,6 +303,7 @@ final class AppModel: ObservableObject {
         lastSynced = nil
         celebration = nil
         tab = .home
+        moreSection = .marriage
     }
 
     /// Show an error from a screen action. Cancelled requests stay silent.

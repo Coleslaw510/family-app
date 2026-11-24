@@ -393,6 +393,7 @@ def create_app() -> FastAPI:
     @app.get("/v1/transactions")
     def list_txns(
         month: str | None = None,
+        category_id: str | None = None,
         limit: int = Query(default=200, ge=1, le=1000),
         auth=Depends(require_user),
     ):
@@ -402,7 +403,13 @@ def create_app() -> FastAPI:
             span_start, span_end = month_bounds(month)
             start, end = span_start.isoformat(), span_end.isoformat()
         with db() as conn:
-            return {"transactions": budget_math._transactions(conn, auth["family_id"], start, end, limit)}
+            if category_id:
+                own_category(conn, auth["family_id"], category_id)
+            return {
+                "transactions": budget_math._transactions(
+                    conn, auth["family_id"], start, end, limit, category_id=category_id
+                )
+            }
 
     @app.post("/v1/transactions")
     def create_txn(body: TxnIn, auth=Depends(require_user)):
@@ -972,16 +979,19 @@ def create_app() -> FastAPI:
     def create_chore(body: ChoreIn, auth=Depends(require_user)):
         title = clean_text(body.title, "Title", 120)
         due = parse_date(body.due_on) if body.due_on else None
+        recurrence = clean_chore_recurrence(body.recurrence)
+        if recurrence != "none" and due is None:
+            raise HTTPException(400, "A due date is required for recurring chores.")
         with db() as conn:
             if body.assignee_id:
                 own_member(conn, auth["family_id"], body.assignee_id)
             cid = new_id()
             conn.execute(
                 """
-                INSERT INTO chores (id, family_id, title, assignee_id, done, due_on, created_by, completed_at, created_at)
-                VALUES (?, ?, ?, ?, 0, ?, ?, NULL, ?)
+                INSERT INTO chores (id, family_id, title, assignee_id, done, due_on, recurrence, created_by, completed_at, created_at)
+                VALUES (?, ?, ?, ?, 0, ?, ?, ?, NULL, ?)
                 """,
-                (cid, auth["family_id"], title, body.assignee_id, due, auth["member_id"], now_iso()),
+                (cid, auth["family_id"], title, body.assignee_id, due, recurrence, auth["member_id"], now_iso()),
             )
         return {"ok": True, "id": cid}
 
@@ -991,25 +1001,46 @@ def create_app() -> FastAPI:
             row = own_row(conn, "chores", chore_id, auth["family_id"])
             title = clean_text(body.title, "Title", 120) if body.title is not None else row["title"]
             assignee = row["assignee_id"]
-            if "assignee_id" in body.model_fields_set:
+            if body.clear_assignee:
+                assignee = None
+            elif "assignee_id" in body.model_fields_set:
                 assignee = body.assignee_id
                 if assignee:
                     own_member(conn, auth["family_id"], assignee)
             due = row["due_on"]
-            if "due_on" in body.model_fields_set:
+            if body.clear_due_on:
+                due = None
+            elif "due_on" in body.model_fields_set:
                 due = parse_date(body.due_on) if body.due_on else None
+            recurrence = row["recurrence"]
+            if body.recurrence is not None:
+                recurrence = clean_chore_recurrence(body.recurrence)
+            if recurrence != "none" and due is None:
+                raise HTTPException(400, "A due date is required for recurring chores.")
             done = int(row["done"])
             completed = row["completed_at"]
+            expected_due = parse_date(body.expected_due_on) if body.expected_due_on else None
+            stale_recurring_completion = (
+                body.done is True
+                and recurrence != "none"
+                and expected_due is not None
+                and expected_due != row["due_on"]
+            )
             if body.done is not None:
-                done = 1 if body.done else 0
-                completed = now_iso() if body.done else None
+                if body.done and recurrence != "none" and not stale_recurring_completion:
+                    due = next_chore_due(due, recurrence, date.today())
+                    done = 0
+                    completed = None
+                elif not stale_recurring_completion:
+                    done = 1 if body.done else 0
+                    completed = now_iso() if body.done else None
             conn.execute(
                 """
                 UPDATE chores
-                SET title = ?, assignee_id = ?, due_on = ?, done = ?, completed_at = ?
+                SET title = ?, assignee_id = ?, due_on = ?, recurrence = ?, done = ?, completed_at = ?
                 WHERE id = ?
                 """,
-                (title, assignee, due, done, completed, chore_id),
+                (title, assignee, due, recurrence, done, completed, chore_id),
             )
         return {"ok": True}
 
@@ -1489,13 +1520,18 @@ class ChoreIn(BaseModel):
     title: str
     assignee_id: str | None = None
     due_on: str | None = None
+    recurrence: str = "none"
 
 
 class ChorePatch(BaseModel):
     title: str | None = None
     assignee_id: str | None = None
+    clear_assignee: bool = False
     due_on: str | None = None
+    clear_due_on: bool = False
+    recurrence: str | None = None
     done: bool | None = None
+    expected_due_on: str | None = None
 
 
 class ImportantIn(BaseModel):
@@ -1672,6 +1708,31 @@ def clean_direction(value: str) -> str:
     if value not in {"inflow", "outflow"}:
         raise HTTPException(400, "Direction must be inflow or outflow.")
     return value
+
+
+def clean_chore_recurrence(value: str | None) -> str:
+    recurrence = value or "none"
+    if recurrence not in {"none", "daily", "weekly", "monthly"}:
+        raise HTTPException(400, "Recurrence must be none, daily, weekly, or monthly.")
+    return recurrence
+
+
+def next_chore_due(due_on: str | None, recurrence: str, today: date) -> str:
+    if not due_on or recurrence == "none":
+        raise HTTPException(400, "A due date is required for recurring chores.")
+    scheduled = date.fromisoformat(due_on)
+
+    def advance(day: date) -> date:
+        if recurrence == "daily":
+            return day + timedelta(days=1)
+        if recurrence == "weekly":
+            return day + timedelta(days=7)
+        return add_months(day, 1)
+
+    next_day = advance(scheduled)
+    while next_day <= today:
+        next_day = advance(next_day)
+    return next_day.isoformat()
 
 
 def check_cents(value: int) -> None:
@@ -2078,6 +2139,7 @@ def household_bundle(conn, family_id: str) -> dict:
                 "assignee_name": names.get(c["assignee_id"]),
                 "done": bool(c["done"]),
                 "due_on": c["due_on"],
+                "recurrence": c["recurrence"],
                 "created_by": c["created_by"],
                 "completed_at": c["completed_at"],
             }

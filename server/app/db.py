@@ -194,6 +194,7 @@ CREATE TABLE IF NOT EXISTS chores (
     assignee_id TEXT,
     done INTEGER NOT NULL DEFAULT 0,
     due_on TEXT,
+    recurrence TEXT NOT NULL DEFAULT 'none',
     created_by TEXT,
     completed_at TEXT,
     created_at TEXT NOT NULL
@@ -569,6 +570,22 @@ def init_db(conn: sqlite3.Connection) -> None:
                 )
             conn.execute(
                 "INSERT INTO schema_migrations (version, applied_at) VALUES (14, ?)",
+                (now_iso(),),
+            )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
+
+    conn.execute("BEGIN IMMEDIATE")
+    try:
+        if conn.execute("SELECT 1 FROM schema_migrations WHERE version = 15").fetchone() is None:
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(chores)")}
+            if "recurrence" not in columns:
+                conn.execute("ALTER TABLE chores ADD COLUMN recurrence TEXT NOT NULL DEFAULT 'none'")
+            conn.execute(
+                "INSERT INTO schema_migrations (version, applied_at) VALUES (15, ?)",
                 (now_iso(),),
             )
         conn.commit()

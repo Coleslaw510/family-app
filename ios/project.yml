@@ -9,8 +9,8 @@ settings:
     SWIFT_VERSION: "5.0"
     IPHONEOS_DEPLOYMENT_TARGET: "16.0"
     TARGETED_DEVICE_FAMILY: "1"
-    MARKETING_VERSION: "1.2.0"
-    CURRENT_PROJECT_VERSION: "3"
+    MARKETING_VERSION: "1.3.0"
+    CURRENT_PROJECT_VERSION: "4"
     CODE_SIGNING_ALLOWED: NO
     CODE_SIGNING_REQUIRED: NO
     CODE_SIGN_IDENTITY: ""
@@ -46,54 +46,11 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         TARGETED_DEVICE_FAMILY: "1"
         SUPPORTS_MACCATALYST: NO
-  BudgetApp:
-    type: application
-    platform: iOS
-    sources:
-      - path: FamilyApp
-        excludes:
-          - Info.plist
-          - RootView.swift
-      - path: BudgetApp
-        excludes:
-          - Info.plist
-    dependencies:
-      - sdk: SpriteKit.framework
-      - sdk: Charts.framework
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.colemcclintock.budgetapp
-        PRODUCT_NAME: BudgetApp
-        GENERATE_INFOPLIST_FILE: NO
-        INFOPLIST_FILE: BudgetApp/Info.plist
-        CODE_SIGN_STYLE: Manual
-        CODE_SIGNING_ALLOWED: NO
-        CODE_SIGNING_REQUIRED: NO
-        CODE_SIGN_IDENTITY: ""
-        "CODE_SIGN_IDENTITY[sdk=iphoneos*]": ""
-        DEVELOPMENT_TEAM: ""
-        PROVISIONING_PROFILE_SPECIFIER: ""
-        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
-        TARGETED_DEVICE_FAMILY: "1"
-        SUPPORTS_MACCATALYST: NO
 schemes:
   FamilyApp:
     build:
       targets:
         FamilyApp: all
-    run:
-      config: Debug
-    archive:
-      config: Release
-    profile:
-      config: Release
-    analyze:
-      config: Debug
-  BudgetApp:
-    build:
-      targets:
-        BudgetApp: all
     run:
       config: Debug
     archive:

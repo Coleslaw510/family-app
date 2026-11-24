@@ -39,21 +39,18 @@ struct MainShell: View {
             HomeView()
                 .tabItem { Label(AppTab.home.title, systemImage: AppTab.home.symbol) }
                 .tag(AppTab.home)
-            MarriageView()
-                .tabItem { Label(AppTab.marriage.title, systemImage: AppTab.marriage.symbol) }
-                .tag(AppTab.marriage)
+            BudgetView()
+                .tabItem { Label(AppTab.budget.title, systemImage: AppTab.budget.symbol) }
+                .tag(AppTab.budget)
             FamilyBoardView()
                 .tabItem { Label(AppTab.family.title, systemImage: AppTab.family.symbol) }
                 .tag(AppTab.family)
-            FoodTabView()
-                .tabItem { Label(AppTab.food.title, systemImage: AppTab.food.symbol) }
-                .tag(AppTab.food)
             CalendarView()
                 .tabItem { Label(AppTab.calendar.title, systemImage: AppTab.calendar.symbol) }
                 .tag(AppTab.calendar)
-            VacationsView()
-                .tabItem { Label(AppTab.vacations.title, systemImage: AppTab.vacations.symbol) }
-                .tag(AppTab.vacations)
+            MoreView()
+                .tabItem { Label(AppTab.more.title, systemImage: AppTab.more.symbol) }
+                .tag(AppTab.more)
         }
         .tint(Theme.accent)
         .background(Theme.bg)

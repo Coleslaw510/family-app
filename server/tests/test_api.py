@@ -2,6 +2,7 @@
 
 import os
 import sqlite3
+from datetime import date, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -379,8 +380,78 @@ def test_household_calendar_and_trips(client):
     assert client.get("/v1/me", headers=headers).status_code == 401
 
 
+def test_chore_due_dates_recurrence_and_completion(client):
+    _created, headers = create_family(client)
+    today = date.today()
+    due = today.isoformat()
+    created = client.post(
+        "/v1/chores",
+        headers=headers,
+        json={"title": "Take bins out", "due_on": due, "recurrence": "weekly"},
+    )
+    assert created.status_code == 200, created.text
+    chore_id = created.json()["id"]
+    chore = client.get("/v1/household", headers=headers).json()["chores"][0]
+    assert chore["due_on"] == due
+    assert chore["recurrence"] == "weekly"
+
+    completed = client.patch(
+        f"/v1/chores/{chore_id}", headers=headers, json={"done": True, "expected_due_on": due}
+    )
+    assert completed.status_code == 200, completed.text
+    next_due = date.fromisoformat(client.get("/v1/household", headers=headers).json()["chores"][0]["due_on"])
+    assert next_due == today + timedelta(days=7)
+    retry = client.patch(
+        f"/v1/chores/{chore_id}", headers=headers, json={"done": True, "expected_due_on": due}
+    )
+    assert retry.status_code == 200, retry.text
+    assert date.fromisoformat(client.get("/v1/household", headers=headers).json()["chores"][0]["due_on"]) == next_due
+    assert client.get("/v1/household", headers=headers).json()["chores"][0]["done"] is False
+
+    cleared = client.patch(
+        f"/v1/chores/{chore_id}",
+        headers=headers,
+        json={"due_on": "", "clear_due_on": True, "recurrence": "none"},
+    )
+    assert cleared.status_code == 200, cleared.text
+    updated = client.get("/v1/household", headers=headers).json()["chores"][0]
+    assert updated["due_on"] is None
+    assert updated["recurrence"] == "none"
+
+    missing_due = client.post(
+        "/v1/chores", headers=headers, json={"title": "No schedule", "recurrence": "daily"}
+    )
+    assert missing_due.status_code == 400
+    invalid = client.post(
+        "/v1/chores", headers=headers, json={"title": "Invalid", "due_on": due, "recurrence": "hourly"}
+    )
+    assert invalid.status_code == 400
+
+
+def test_chore_patch_can_clear_assignee(client):
+    created, headers = create_family(client)
+    chore_id = client.post(
+        "/v1/chores",
+        headers=headers,
+        json={"title": "Shared task", "assignee_id": created["member"]["id"]},
+    ).json()["id"]
+
+    response = client.patch(
+        f"/v1/chores/{chore_id}", headers=headers, json={"clear_assignee": True}
+    )
+
+    assert response.status_code == 200, response.text
+    chore = client.get("/v1/household", headers=headers).json()["chores"][0]
+    assert chore["assignee_id"] is None
+    assert chore["assignee_name"] is None
+
+
 def test_transaction_edit_and_delete(client):
     _created, headers = create_family(client)
+    category = next(
+        item for item in client.get("/v1/categories", headers=headers).json()["categories"]
+        if item["name"] == "Groceries"
+    )
     created = client.post(
         "/v1/transactions",
         headers=headers,
@@ -390,9 +461,39 @@ def test_transaction_edit_and_delete(client):
     edited = client.patch(
         f"/v1/transactions/{txn_id}",
         headers=headers,
-        json={"merchant": "City Fuel Co", "amount_cents": 5300},
+        json={"merchant": "City Fuel Co", "amount_cents": 5300, "category_id": category["id"]},
     )
     assert edited.json()["merchant"] == "City Fuel Co"
     assert edited.json()["amount_cents"] == 5300
+    assert edited.json()["category_id"] == category["id"]
     assert client.delete(f"/v1/transactions/{txn_id}", headers=headers).status_code == 200
     assert client.delete(f"/v1/transactions/{txn_id}", headers=headers).status_code == 404
+
+
+def test_transaction_list_filters_by_category_and_month(client):
+    _created, headers = create_family(client)
+    categories = client.get("/v1/categories", headers=headers).json()["categories"]
+    groceries = next(item for item in categories if item["name"] == "Groceries")
+    fuel = next(item for item in categories if item["name"] == "Fuel")
+    for merchant, category, day in (
+        ("Market", groceries, "2026-11-04"),
+        ("Farm shop", groceries, "2026-11-20"),
+        ("Gas station", fuel, "2026-11-12"),
+        ("October market", groceries, "2026-10-31"),
+    ):
+        response = client.post(
+            "/v1/transactions",
+            headers=headers,
+            json={
+                "merchant": merchant,
+                "amount_cents": 1000,
+                "occurred_on": day,
+                "kind": "expense",
+                "category_id": category["id"],
+            },
+        )
+        assert response.status_code == 200, response.text
+    filtered = client.get(
+        f"/v1/transactions?month=2026-11&category_id={groceries['id']}&limit=1000", headers=headers
+    )
+    assert [item["merchant"] for item in filtered.json()["transactions"]] == ["Farm shop", "Market"]

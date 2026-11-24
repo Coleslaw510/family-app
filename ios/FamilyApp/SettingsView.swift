@@ -8,7 +8,6 @@ struct SettingsView: View {
     @State private var server = ""
     @State private var code: String?
     @State private var showCode = false
-    @State private var codePurpose = "Join code"
     @State private var integrations: IntegrationsStatus?
     @State private var simplefin: SimpleFINStatus?
     @State private var setupToken = ""
@@ -50,7 +49,6 @@ struct SettingsView: View {
                         Task {
                             if let fresh = await app.newJoinCode() {
                                 code = fresh
-                                codePurpose = "Join code"
                                 showCode = true
                             }
                         }
@@ -61,24 +59,6 @@ struct SettingsView: View {
                     Text("Family")
                 } footer: {
                     Text("Join codes expire in 24 hours and can be used once.")
-                }
-
-                Section {
-                    Button {
-                        Task {
-                            if let fresh = await app.newBudgetPairingCode() {
-                                code = fresh
-                                codePurpose = "Budget app pairing code"
-                                showCode = true
-                            }
-                        }
-                    } label: {
-                        Label("Generate pairing code", systemImage: "rectangle.portrait.and.arrow.forward")
-                    }
-                } header: {
-                    Text("Budget app")
-                } footer: {
-                    Text("Generate a one-time code here, then enter it in the Budget app. It expires after 10 minutes and can only be used once.")
                 }
 
                 Section {
@@ -189,13 +169,11 @@ struct SettingsView: View {
                 integrations = try? await app.api.get("/v1/integrations")
                 await loadSimpleFIN()
             }
-            .alert(codePurpose, isPresented: $showCode) {
+            .alert("Join code", isPresented: $showCode) {
                 Button("Copy") { if let code { Pasteboard.copy(code) } }
                 Button("OK", role: .cancel) {}
             } message: {
-                Text(codePurpose == "Join code"
-                    ? "\(code ?? "")\nShare it once. It expires in a day."
-                    : "\(code ?? "")\nEnter this code in the Budget app within 10 minutes. It can only be used once.")
+                Text("\(code ?? "")\nShare it once. It expires in a day.")
             }
             .confirmationDialog("Disconnect SimpleFIN?", isPresented: $showDisconnectConfirmation, titleVisibility: .visible) {
                 Button("Disconnect", role: .destructive) {

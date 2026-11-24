@@ -132,10 +132,18 @@ struct ChoreBody: Encodable {
     var title: String
     var assigneeId: String?
     var dueOn: String?
+    var recurrence: String = "none"
 }
 
 struct ChorePatchBody: Encodable {
-    var done: Bool
+    var done: Bool? = nil
+    var title: String? = nil
+    var assigneeId: String? = nil
+    var clearAssignee: Bool = false
+    var dueOn: String? = nil
+    var clearDueOn: Bool = false
+    var recurrence: String? = nil
+    var expectedDueOn: String? = nil
 }
 
 struct ImportantBody: Encodable {
